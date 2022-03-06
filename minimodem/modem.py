@@ -19,20 +19,10 @@ class MiniModem:
         self.baudrate = baudrate
         self.process = None
         self.active = False
+
         #TODO handle case of minimodem not installed
-        self.execpath = pexpect.which('minimodem')
-
-        #shellcmd = [
-        #    self.execpath,
-        #    '--' + self.mode,
-        #    '--quiet',
-        #    '--alsa=' + self.alsa_dev,
-        #    str(self.baudrate)
-        #]
-
-        self.shellcmd = '%s --%s --quiet --alsa=%s --print-filer %s' %(self.execpath, self.mode, self.alsa_dev, self.baudrate)
-
-        #self.shellcmd = ' '.join(shellcmd)
+        execpath = pexpect.which('minimodem')
+        self.shellcmd = '%s --%s --quiet --alsa=%s --print-filter %s' %(execpath, self.mode, self.alsa_dev, self.baudrate)
 
         if start:
             self.start()
