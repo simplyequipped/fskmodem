@@ -22,7 +22,7 @@ class MiniModem:
         self.active = False
 
         #TODO handle case of minimodem not installed
-        execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').trim()
+        execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
         self.shellcmd = '%s --%s --quiet --alsa=%s --print-filter %s' %(execpath, self.mode, self.alsa_dev, self.baudrate)
 
         if start:
