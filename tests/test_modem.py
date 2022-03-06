@@ -8,9 +8,9 @@ if alsa_device is None:
 modem = minimodem.Modem(alsa_device)
 #modem.send('hello world!')
 
-input('Press enter to stop modems\n')
-modem.stop()
+#input('Press enter to stop modems\n')
+#modem.stop()
 
-input('Press enter to quit test\n')
+#input('Press enter to quit test\n')
 
 
