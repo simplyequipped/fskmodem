@@ -35,7 +35,7 @@ class MiniModem:
     def stop(self):
         self.active = False
         # send ctrl-c to child process
-        self.process.send(chr(c))
+        self.process.send(chr(3))
         #TODO how to kill the process?
         #self.process.proc.terminate()
         #self.process.proc.communicate()
