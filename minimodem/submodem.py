@@ -108,7 +108,7 @@ class Modem:
             self.tx.send(data)
 
     def receive(self, timeout=1):
-        ifself.rx:
+        if self.rx:
             return self.rx.receive()
 
     def _job_loop(self):

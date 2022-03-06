@@ -5,7 +5,7 @@ if alsa_device is None:
     print('No alsa device found')
     exit()
 
-modem = minimodem.Modem(alsa_device)
+modem = minimodem.SubModem(alsa_device)
 #modem.send('hello world!')
 
 #input('Press enter to stop modems\n')
