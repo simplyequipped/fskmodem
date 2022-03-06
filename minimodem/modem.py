@@ -144,7 +144,7 @@ def get_alsa_device(device_desc, device_mode=Modem.RX):
         return None
 
     alsa_dev = None
-    alsa_devs = subprocess.check_output(alsa_cmd).decode('utf-8').split('\r\n')
+    alsa_devs = subprocess.check_output(alsa_cmd).decode('utf-8').split('\n')
 
     for line in alsa_devs:
         if device_desc in line:
