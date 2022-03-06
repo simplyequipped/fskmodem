@@ -30,7 +30,7 @@ class MiniModem:
         #    str(self.baudrate)
         #]
 
-        self.shellcmd = '%s --%s --quiet --alsa=%s %s' %(self.execpath, self.mode, self.alsa_dev, self.baudrate)
+        self.shellcmd = '%s --%s --quiet --alsa=%s --print-filer %s' %(self.execpath, self.mode, self.alsa_dev, self.baudrate)
 
         #self.shellcmd = ' '.join(shellcmd)
 
@@ -45,7 +45,10 @@ class MiniModem:
     def stop(self):
         self.active = False
         #TODO how to kill the process?
-        #self.process.kill()
+        self.process.proc.terminate()
+        self.process.proc.communicate()
+            if self.process.proc.poll() == None:
+                self.process.proc.kill()
 
 
 class Modem:
@@ -105,7 +108,7 @@ class Modem:
 
         self.tx.process.sendline(data)
 
-    def receive(self, timeout=0):
+    def receive(self, timeout=1):
         if not self.rx:
             return None
 
@@ -128,7 +131,7 @@ class Modem:
 
                 if len(data):
                     #TODO append data to buffer?
-                    print(data)
+                    print(':' + data)
 
             time.sleep(1)
 
