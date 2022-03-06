@@ -1,4 +1,5 @@
-import os, threading, time
+import os, subprocess, threading, time, signal
+from subprocess import PIPE
 import pexpect
 from pexpect.popen_spawn import PopenSpawn
 
@@ -21,7 +22,7 @@ class MiniModem:
         self.active = False
 
         #TODO handle case of minimodem not installed
-        execpath = pexpect.which('minimodem')
+        execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
         self.shellcmd = '%s --%s --quiet --alsa=%s --print-filter %s' %(execpath, self.mode, self.alsa_dev, self.baudrate)
 
         if start:
@@ -29,18 +30,29 @@ class MiniModem:
 
     def start(self):
         if not self.active:
-            self.process = PopenSpawn(self.shellcmd, timeout=None, encoding='utf-8')
+            self.process = subprocess.Popen(self.shellcmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE)
             self.active = True
 
     def stop(self):
         self.active = False
-        # send ctrl-c to child process
-        self.process.send(chr(3))
-        #TODO how to kill the process?
-        #self.process.proc.terminate()
-        #self.process.proc.communicate()
-        #if self.process.proc.poll() == None:
-        #    self.process.proc.kill()
+        self.process.terminate()
+        self.process.communicate()
+        if self.process.poll() == None:
+            self.process.kill()
+
+    def send(self, data):
+        if not type(data) == bytes():
+            data = data.encode('utf-8')
+
+        self.process.stdin.write(data)
+        self.process.stdin.flush()
+
+    def receive(self, size=1):
+        # prevent blocking until EOF by setting read() size negative
+        if size < 0:
+            size = 1
+        data = self.process.stdout.read(size)
+        return data.decode('utf-8')
 
 
 class Modem:
@@ -55,6 +67,7 @@ class Modem:
         self.alsa_dev_out = alsa_dev_out
         self.rx = None
         self.tx = None
+        self.buffer = ''
         self.active = False
 
         if mode in Modem.MODES:
@@ -95,20 +108,12 @@ class Modem:
             self.rx.stop()
 
     def send(self, data):
-        if not self.tx:
-            return None
+        if self.tx:
+            self.tx.send(data)
 
-        self.tx.process.sendline(data)
-
-    def receive(self, timeout=1):
-        if not self.rx:
-            return None
-
-        self.rx.process.expect_exact(pexpect.TIMEOUT, timeout=timeout)
-        return self.rx.process.before
-
-    def register_rx_callback(self, func):
-        pass
+    def receive(self, size=1):
+        if self.rx:
+            return self.rx.receive(size=size)
 
     def _job_loop(self):
         while self.active:
@@ -122,28 +127,24 @@ class Modem:
                     pass
 
                 if len(data):
-                    #TODO append data to buffer?
-                    print(':' + data)
+                    self.buffer += data
 
-            time.sleep(1)
+            time.sleep(0.1)
 
 
 
 def get_alsa_device(device_desc, device_mode=Modem.RX):
 
     if device_mode in [Modem.RXTX, Modem.RX]:
-        alsa_cmd = 'arecord -l'
+        alsa_cmd = ['arecord', '-l']
     elif device_mode == Modem.TX:
-        alsa_cmd = 'aplay -l'
+        alsa_cmd = ['aplay', '-l']
     else:
         raise Exception('Unknown mode \'' + device_mode + '\'')
         return None
 
     alsa_dev = None
-    cmd = pexpect.spawn(alsa_cmd)
-    cmd.expect(pexpect.EOF)
-    alsa_devs = cmd.before.decode('utf-8').split('\r\n')
-    cmd.close()
+    alsa_devs = subprocess.check_output(alsa_cmd).decode('utf-8').split('\r\n')
 
     for line in alsa_devs:
         if device_desc in line:
