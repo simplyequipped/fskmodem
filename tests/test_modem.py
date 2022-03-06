@@ -1,16 +1,15 @@
-import time
 import minimodem
 
 alsa_device = minimodem.get_alsa_device('USB PnP')
+if alsa_device is None:
+    print('No alsa device found')
+    exit()
+
 modem = minimodem.Modem(alsa_device)
+#modem.send('hello world!')
 
-modem.send('hello world!')
+input('Press enter to stop modems\n')
 
-rx_start = time.time()
-timeout = 10
+input('Press enter to quit test\n')
 
-while time.time() < rx_start + timeout:
-    time.sleep(1)
-    data = modem.receive()
-    print(': ' + data)
 
