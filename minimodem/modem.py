@@ -101,7 +101,7 @@ class Modem:
             raise TypeError('Modem data must be type bytes, ' + str(type(data)) + ' given.')
             return None
 
-        data = HDLC.START + str(data) + HDLC.STOP
+        data = HDLC.START + data + HDLC.STOP
         self._tx.send(data)
 
     def set_rx_callback(self, callback):
