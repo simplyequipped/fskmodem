@@ -1,5 +1,5 @@
 import os, subprocess, threading, time
-from subprocess import PIPE, DEVNULL, TimeoutExpired
+from subprocess import PIPE, DEVNULL, TimeoutExpired, CalledProcessError
 
 
 RX = 'rx'
@@ -28,8 +28,12 @@ class MiniModem:
         self.process = None
         self.online = False
 
-        #TODO handle case of minimodem not installed
-        execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
+        try:
+            execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
+        except CalledProcessError:
+            print('\nError: application \'minimodem\' not installed, exiting.')
+            print('Try: sudo apt install minimodem')
+            exit()
 
         if self.alsa_dev == None:
             # use system default audio device
@@ -83,13 +87,8 @@ class Modem:
         self._rx = None
         self._tx = None
         self.rx_callback = None
-        # TODO set equal to Reticulum MTU
-        self.MTU = 512
+        self.MTU = 500
         self.online = False
-
-        #TODO remove
-        self.tx_bytes = b''
-        self.rx_bytes = b''
 
         if self.alsa_dev_out == None:
             self.alsa_dev_out = self.alsa_dev_in
@@ -128,16 +127,12 @@ class Modem:
 
         data = HDLC.START + data + HDLC.STOP
         self._tx.send(data)
-        #TODO remove
-        self.tx_bytes += data
 
     def set_rx_callback(self, callback):
         self.rx_callback = callback
 
     def _receive(self):
         data = self._rx.receive()
-        #TODO remove
-        self.rx_bytes += data
 
         # capture bad characters that cannot be decoded
         try:
