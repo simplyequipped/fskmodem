@@ -74,6 +74,10 @@ class Modem:
         self.MTU = 512
         self.online = False
 
+        #TODO remove
+        self.tx_bytes = b''
+        self.rx_bytes = b''
+
         if self.alsa_dev_out == None:
             self.alsa_dev_out = self.alsa_dev_in
 
@@ -103,12 +107,16 @@ class Modem:
 
         data = HDLC.START + data + HDLC.STOP
         self._tx.send(data)
+        #TODO remove
+        self.tx_bytes += data
 
     def set_rx_callback(self, callback):
         self.rx_callback = callback
 
     def _receive(self):
         data = self._rx.receive()
+        #TODO remove
+        self.rx_bytes += data
 
         # capture bad characters that cannot be decoded
         try:
@@ -120,14 +128,10 @@ class Modem:
 
     def _rx_loop(self):
         data_buffer = b''
-        self.buffer = b''
 
         while self.online:
             # blocks until next character received
-            #data_buffer += self._receive()
-            data = self._receive()
-            data_buffer += data
-            self.buffer += data
+            data_buffer += self._receive()
             
             if HDLC.START in data_buffer:
                 if HDLC.STOP in data_buffer:
