@@ -1,7 +1,7 @@
 import minimodem
 
 def rx_callback(data):
-    print(data.decode('utf-8'))
+    print('\nPacket received: ' + data.decode('utf-8'))
 
 alsa_device = minimodem.get_alsa_device('USB PnP')
 if alsa_device is None:
