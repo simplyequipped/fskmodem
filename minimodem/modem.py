@@ -51,7 +51,7 @@ class MiniModem:
         self.online = False
         self.process.terminate()
         self.process.communicate()
-        if self.process.poll() == None:
+        if self.process.poll(timeout=1) == None:
             self.process.kill()
 
     def send(self, data):
