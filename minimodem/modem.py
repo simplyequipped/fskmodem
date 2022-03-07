@@ -1,5 +1,5 @@
 import os, subprocess, threading, time
-from subprocess import PIPE, DEVNULL
+from subprocess import PIPE, DEVNULL, TimeoutExpired
 
 
 RX = 'rx'
@@ -50,9 +50,22 @@ class MiniModem:
     def stop(self):
         self.online = False
         self.process.terminate()
-        self.process.communicate()
-        if self.process.poll(timeout=1) == None:
+
+        comm_thread = threading.Thread(target=self.process.communicate)
+        comm_thread.daemon = True
+        comm_thread.start()
+        
+        comm_start = time.time()
+        comm_timeout = 5
+
+        while time.time() < comm_start + comm_timeout:
+            time.sleep(1)
+
+        if self.process.poll() == None:
             self.process.kill()
+            comm_thread = threading.Thread(target=self.process.communicate)
+            comm_thread.daemon = True
+            comm_thread.start()
 
     def send(self, data):
         self.process.stdin.write(data)
@@ -97,8 +110,15 @@ class Modem:
 
     def stop(self):
         self.online = False
-        self._tx.stop()
-        self._rx.stop()
+
+        stop_tx_thread = threading.Thread(target=self._tx.stop)
+        stop_tx_thread.daemon = True
+        stop_tx_thread.start()
+
+        stop_rx_thread = threading.Thread(target=self._rx.stop)
+        stop_rx_thread.daemon = True
+        stop_rx_thread.start()
+
 
     def send(self, data):
         if type(data) != bytes:
