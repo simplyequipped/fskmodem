@@ -158,7 +158,7 @@ class Modem:
                 if HDLC.STOP in data_buffer:
                     # delimiters found, capture substring
                     start = data_buffer.find(HDLC.START) + len(HDLC.START)
-                    end = data_buffer.end (HDLC.STOP, start)
+                    end = data_buffer.find(HDLC.STOP, start)
                     if end > start:
                         data = data_buffer[start:end]
                         # remove received data from buffer
