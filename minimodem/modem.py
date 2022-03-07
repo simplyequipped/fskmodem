@@ -103,10 +103,11 @@ class Modem:
     def start(self):
         self._rx.start()
         self._tx.start()
+        self.online = True
+
         self._job_thread = threading.Thread(target=self._rx_loop)
         self._job_thread.daemon = True
         self._job_thread.start()
-        self.online = True
 
     def stop(self):
         self.online = False
