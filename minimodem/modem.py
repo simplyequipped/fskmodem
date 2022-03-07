@@ -1,5 +1,5 @@
 import os, subprocess, threading, time
-from subprocess import PIPE
+from subprocess import PIPE, DEVNULL
 
 
 RX = 'rx'
@@ -44,7 +44,7 @@ class MiniModem:
 
     def start(self):
         if not self.online:
-            self.process = subprocess.Popen(self.shellcmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE)
+            self.process = subprocess.Popen(self.shellcmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
             self.online = True
 
     def stop(self):
