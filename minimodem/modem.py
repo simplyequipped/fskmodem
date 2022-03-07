@@ -120,10 +120,14 @@ class Modem:
 
     def _rx_loop(self):
         data_buffer = b''
+        self.buffer = b''
 
         while self.online:
             # blocks until next character received
-            data_buffer += self._receive()
+            #data_buffer += self._receive()
+            data = self._receive()
+            data_buffer += data
+            self.buffer += data
             
             if HDLC.START in data_buffer:
                 if HDLC.STOP in data_buffer:
