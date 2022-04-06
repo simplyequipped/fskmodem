@@ -128,7 +128,7 @@ class MiniModem:
         '''Start the modem by creating the appropriate subprocess with the given parameters'''
         if not self.online:
             # create subprocess with pipes for interaction with child process
-            self.process = subprocess.Popen(self.shell_cmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+            self.process = subprocess.Popen(self.shell_cmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=PIPE)
             self.online = True
 
     def stop(self):
@@ -180,6 +180,19 @@ class MiniModem:
         :return: bytes, received byte string of specified length
         '''
         return self.process.stdout.read(size)
+
+    def _get_stderr(self, size=1):
+        '''Get stderr data from the underlying minimodem subprocess
+
+        Reading from the subprocess.Popen.stderr pipe is blocking until the specified number of bytes is available.
+
+        This method is only used with receive mode (mode = minimodem.RX)
+
+        :param size: int, number of bytes to read from the subprocess pipe
+
+        :return: bytes, received byte string of specified length
+        '''
+        return self.process.stderr.read(size)
 
 
 class Modem:
@@ -261,6 +274,11 @@ class Modem:
         rx_thread = threading.Thread(target=self._rx_loop)
         rx_thread.daemon = True
         rx_thread.start()
+
+        # start the stderr loop as a thread since reads from the child process are blocking
+        stderr_thread = threading.Thread(target=self._stderr_loop)
+        stderr_thread.daemon = True
+        stderr_thread.start()
 
         # start the job loop to process data in the tx buffer
         job_thread = threading.Thread(target=self._job_loop)
@@ -346,36 +364,12 @@ class Modem:
         '''
         data_buffer = b''
         max_data_buffer_len = 1024
-        carrier_event_symbol = b'###'
 
         while self.online:
             # blocks until next character received
             data_buffer += self._receive()
             
-            # detect carrier event
-            if carrier_event_symbol in data_buffer:
-                carrier_event_start = data_buffer.find(carrier_event_symbol) + len(carrier_event_symbol)
-                carrier_event_end = data_buffer.find(carrier_event_symbol, carrier_event_start)
-                if carrier_event_end > 0:
-                    # capture carrier event text
-                    carrier_event = data_buffer[carrier_event_start:carrier_event_end].trim()
-                    # remove carrier event text from buffer
-                    data_buffer = data_buffer[carrier_event_end + len(carrier_event_symbol):]
-
-                    carrier_event_data  = carrier_event.split(b' ')
-                    carrier_event_type = carrier_event_data[0]
-
-                    # set carrier sense state
-                    if carrier_event_type == b'CARRIER':
-                        self.carrier_sense = True
-                        #TODO
-                        print('CARRIER')
-                    elif carrier_event_type == b'NOCARRIER':
-                        self.carrier_sense = False
-                        #TODO
-                        print('NOCARRIER')
-
-            elif HDLC.START in data_buffer:
+            if HDLC.START in data_buffer:
                 if HDLC.STOP in data_buffer:
                     # delimiters found, capture substring
                     start = data_buffer.find(HDLC.START) + len(HDLC.START)
@@ -405,6 +399,49 @@ class Modem:
                 # avoid missing start delimiter split over multiple loop iterations
                 if len(data_buffer) > 10 * len(HDLC.START):
                     data_buffer = b''
+
+            # simmer down
+            time.sleep(0.001)
+
+    def _stderr_loop(self):
+        '''Receive stderr data into a buffer and find carrier events
+
+        The carrier sense property is set (True/False) depending on the type of event received (CARRIER or NOCARRIER).
+        '''
+        stderr_buffer = b''
+        carrier_event_symbol = b'###'
+
+        while self.online:
+            # blocks until next character received
+            stderr_buffer += self._rx._get_stderr()
+            
+            # detect carrier event
+            if carrier_event_symbol in stderr_buffer:
+                carrier_event_start = stderr_buffer.find(carrier_event_symbol) + len(carrier_event_symbol)
+                carrier_event_end = stderr_buffer.find(carrier_event_symbol, carrier_event_start)
+                if carrier_event_end > 0:
+                    # capture carrier event text
+                    carrier_event = stderr_buffer[carrier_event_start:carrier_event_end].trim()
+                    # remove carrier event text from buffer
+                    stderr_buffer = stderr_buffer[carrier_event_end + len(carrier_event_symbol):]
+
+                    carrier_event_data  = carrier_event.split(b' ')
+                    carrier_event_type = carrier_event_data[0]
+
+                    # set carrier sense state
+                    if carrier_event_type == b'CARRIER':
+                        self.carrier_sense = True
+                        #TODO
+                        print('CARRIER')
+                    elif carrier_event_type == b'NOCARRIER':
+                        self.carrier_sense = False
+                        #TODO
+                        print('NOCARRIER')
+
+            else:
+                # avoid missing symbol split over multiple loop iterations
+                if len(stderr_buffer) > 2 * len(carrier_event_symbol):
+                    stderr_buffer = b''
 
             # simmer down
             time.sleep(0.001)
