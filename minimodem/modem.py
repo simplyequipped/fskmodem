@@ -66,9 +66,10 @@ class MiniModem:
         stop(self)
         send(self, data)
         receive(self[, size=1])
+        _get_stderr(self[, size=1])
     '''
 
-    def __init__(self, mode, alsa_dev, baudrate=300, sync_byte=None, confidence=None, start=True):
+    def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, start=True):
         '''Initialize MiniModem class instance
 
         :param mode: str, operating mode of the minimodem application (see module constants)
@@ -224,16 +225,17 @@ class Modem:
         _receive(self[, size=1])
         _job_loop(self)
         _rx_loop(self)
+        _stderr_loop(self)
     '''
 
-    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=2, start=True):
+    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True):
         '''Initialize a Modem class instance
 
         :param alsa_dev_in: str, input ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None)
         :param alsa_dev_out: str, output ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None, if None alsa_dev_out is set to alsa_dev_in)
         :param baudrate: int, baud rate of the modem (optional, default: 300)
         :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: '0x23' = UTF-8 '#')
-        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 2.0)
+        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 1.5)
         :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
 
         :return: object, class instance
