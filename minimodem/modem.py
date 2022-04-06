@@ -108,7 +108,6 @@ class MiniModem:
         switch_alsa_dev = ''
         switch_confidence = ''
         switch_sync_byte = ''
-        switch_quiet = ' --quiet'
         switch_filter = ' --print-filter'
 
         if self.alsa_dev != None:
@@ -118,7 +117,7 @@ class MiniModem:
         if self.sync_byte != None:
             switch_sync_byte = ' --sync-byte ' + str(self.sync_byte)
 
-        switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_quiet, switch_filter]
+        switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_filter]
         # confidence, sync byte, quiet, and print filter are not used in tx mode
         self.shell_cmd = exec_path + ''.join(switches) + ' ' + str(self.baudrate)
 
@@ -369,8 +368,12 @@ class Modem:
                     # set carrier sense state
                     if carrier_event_type == b'CARRIER':
                         self.carrier_sense = True
+                        #TODO
+                        print('CARRIER')
                     elif carrier_event_type == b'NOCARRIER':
                         self.carrier_sense = False
+                        #TODO
+                        print('NOCARRIER')
 
             elif HDLC.START in data_buffer:
                 if HDLC.STOP in data_buffer:
