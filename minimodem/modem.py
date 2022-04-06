@@ -21,7 +21,8 @@ Constants:
 
 
 import os, subprocess, threading, time, random
-from subprocess import PIPE, DEVNULL, CalledProcessError
+from subprocess import PIPE, CalledProcessError
+
 
 
 # Package constants
@@ -431,12 +432,8 @@ class Modem:
                     # set carrier sense state
                     if carrier_event_type == b'CARRIER':
                         self.carrier_sense = True
-                        #TODO
-                        print('CARRIER')
                     elif carrier_event_type == b'NOCARRIER':
                         self.carrier_sense = False
-                        #TODO
-                        print('NOCARRIER')
 
             else:
                 # avoid missing symbol split over multiple loop iterations
