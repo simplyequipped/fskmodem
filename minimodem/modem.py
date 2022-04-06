@@ -52,9 +52,11 @@ class MiniModem:
         mode : str, operating mode of the minimodem application (see module constants)
         alsa_dev : str | None, ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
         baudrate : int, baud rate of the modem
+        sync_byte : str, suppress rx carrier detection until byte is received
+        confidence : float, minimum confidence threshold based on SNR (i.e. squelch)
         process : object, subprocess.Popen instance of the minimodem application
         online: bool, status of the modem
-        shellcmd: str, command string passed to subprocess.Popen
+        shell_cmd: str, command string passed to subprocess.Popen
 
     Methods:
 
@@ -65,12 +67,14 @@ class MiniModem:
         receive(self[, size=1])
     '''
 
-    def __init__(self, mode, alsa_dev, baudrate=300, start=True):
+    def __init__(self, mode, alsa_dev, baudrate=300, sync_byte=None, confidence=None, start=True):
         '''Initialize MiniModem class instance
 
         :param mode: str, operating mode of the minimodem application (see module constants)
-        :param alsa_dev: str, ALSA device formated as 'card,device' (ex. '2,0')
+        :param alsa_dev: str, ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
         :param baudrate: int, baud rate of the modem (optional, default: 300)
+        :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: None, ex. '0x23' = UTF-8 '#')
+        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: None, ex. 2.0)
         :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
 
         :return: object, class instance
@@ -86,23 +90,37 @@ class MiniModem:
 
         self.alsa_dev = alsa_dev
         self.baudrate = baudrate
+        self.sync_byte = sync_byte
+        self.confidence = confidence
         self.process = None
-        self.shellcmd = None
+        self.shell_cmd = None
         self.online = False
 
         try:
             # get full path of minimodem binary
-            execpath = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
+            exec_path = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
         except CalledProcessError:
             raise ProcessLookupError('minimodem application not installed, try: sudo apt install minimodem')
 
-        if self.alsa_dev == None:
-            # use system default audio device
-            self.shellcmd = '%s --%s --quiet --print-filter %s' %(execpath, self.mode, self.baudrate)
-        else:
-            # use specified alsa audio device
-            self.shellcmd = '%s --%s --quiet --alsa=%s --print-filter %s' %(execpath, self.mode, self.alsa_dev, self.baudrate)
+        # configure comandline switches
+        # note spaces before switch strings
+        switch_mode = ' --' + str(self.mode)
+        switch_alsa_dev = ''
+        switch_confidence = ''
+        switch_sync_byte = ''
+        switch_quiet = ' --quiet'
+        switch_filter = ' --print-filter'
 
+        if self.alsa_dev != None:
+            switch_alsa_dev = ' --alsa=' + str(self.alsa_dev)
+        if self.confidence != None:
+            switch_confidence = ' --confidence ' + str(self.confidence)
+        if self.sync_byte != None:
+            switch_sync_byte = ' --sync-byte ' + str(self.sync_byte)
+
+        switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_quiet, switch_filter]
+        # confidence, sync byte, quiet, and print filter are not used in tx mode
+        self.shell_cmd = exec_path + ''.join(switches) + ' ' + str(self.baudrate)
 
         if start:
             self.start()
@@ -111,7 +129,7 @@ class MiniModem:
         '''Start the modem by creating the appropriate subprocess with the given parameters'''
         if not self.online:
             # create subprocess with pipes for interaction with child process
-            self.process = subprocess.Popen(self.shellcmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+            self.process = subprocess.Popen(self.shell_cmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
             self.online = True
 
     def stop(self):
@@ -145,6 +163,9 @@ class MiniModem:
 
         :param data: bytes, byte string of data to send to the subprocess pipe
         '''
+        if self.sync_byte != None:
+            data = self.sync_byte.encode('utf-8') + data
+
         self.process.stdin.write(data)
         self.process.stdin.flush()
 
@@ -170,6 +191,8 @@ class Modem:
         alsa_dev_in : str, input ALSA device formated as 'card,device' (ex. '2,0')
         alsa_dev_out : str, output ALSA device formated as 'card,device' (ex. '2,0')
         baudrate : int, baud rate of the modem
+        sync_byte : str, suppress rx carrier detection until byte is received
+        confidence : float, minimum confidence threshold based on SNR (i.e. squelch)
         _rx : object, instance of the MiniModem class
         _tx : object, instance of the MiniModem class
         rx_callback: func, received packet callback function with signature func(data) where data is type bytes
@@ -187,12 +210,14 @@ class Modem:
         _rx_loop(self)
     '''
 
-    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, start=True):
+    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=2, start=True):
         '''Initialize a Modem class instance
 
         :param alsa_dev_in: str, input ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None)
         :param alsa_dev_out: str, output ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None, if None alsa_dev_out is set to alsa_dev_in)
         :param baudrate: int, baud rate of the modem (optional, default: 300)
+        :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: '0x23' = UTF-8 '#')
+        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 2.0)
         :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
 
         :return: object, class instance
@@ -201,6 +226,8 @@ class Modem:
         self.alsa_dev_in = alsa_dev_in
         self.alsa_dev_out = alsa_dev_out
         self.baudrate = baudrate
+        self.sync_byte = sync_byte
+        self.confidence = confidence
         self._rx = None
         self._tx = None
         self.rx_callback = None
@@ -212,9 +239,9 @@ class Modem:
             self.alsa_dev_out = self.alsa_dev_in
 
         # create receive minimodem instance
-        self._rx = MiniModem(RX, self.alsa_dev_in, baudrate=self.baudrate, start=False)
+        self._rx = MiniModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
         # create transmit minimodem instance
-        self._tx = MiniModem(TX, self.alsa_dev_out, baudrate=self.baudrate, start=False)
+        self._tx = MiniModem(TX, self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
 
         # start the modem now if specified
         if start:
