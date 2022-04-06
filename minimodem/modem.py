@@ -21,7 +21,7 @@ Constants:
 
 
 import os, subprocess, threading, time
-from subprocess import PIPE, DEVNULL, TimeoutExpired, CalledProcessError
+from subprocess import PIPE, DEVNULL, CalledProcessError
 
 
 # Package constants
@@ -197,6 +197,8 @@ class Modem:
         _tx : object, instance of the MiniModem class
         rx_callback: func, received packet callback function with signature func(data) where data is type bytes
         MTU: int, maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
+        carrier_sense : bool, if a carrier signal is being received
+        _tx_buffer : list, data to be transmitted (buffered when receiving based on carrier detect)
         online: bool, status of the modem
 
     Methods:
@@ -207,6 +209,7 @@ class Modem:
         send(self, data)
         set_rx_callback(callback)
         _receive(self[, size=1])
+        _job_loop(self)
         _rx_loop(self)
     '''
 
@@ -232,6 +235,8 @@ class Modem:
         self._tx = None
         self.rx_callback = None
         self.MTU = 500
+        self.carrier_sense = False
+        self._tx_buffer = []
         self.online = False
 
         # if a separate output device is not specified, assume it is the same as the input device
@@ -254,9 +259,14 @@ class Modem:
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
-        self._job_thread = threading.Thread(target=self._rx_loop)
-        self._job_thread.daemon = True
-        self._job_thread.start()
+        rx_thread = threading.Thread(target=self._rx_loop)
+        rx_thread.daemon = True
+        rx_thread.start()
+
+        # start the job loop to process data in the tx buffer
+        job_thread = threading.Thread(target=self._job_loop)
+        job_thread.daemon = True
+        job_thread.start()
 
     def stop(self):
         '''Stop the modem by stopping the underlying MiniModem instances'''
@@ -273,12 +283,18 @@ class Modem:
     def send(self, data):
         '''Send data to the underlying transmit MiniModem instance after wrapping data with HDLC flags
 
+        If receiving (a carrier event occured), buffer the data to transmit later
+
         :param data: bytes, byte string of data to send
 
         :raises: TypeError, if data is not type bytes
         '''
         if type(data) != bytes:
             raise TypeError('Modem data must be type bytes, ' + str(type(data)) + ' given.')
+            return None
+
+        if self.carrier_sense:
+            self._tx_buffer.append(data)
             return None
 
         # wrap data in start and stop flags
@@ -292,11 +308,24 @@ class Modem:
         '''
         self.rx_callback = callback
 
+    def _job_loop(self):
+        '''Process data in the transmit buffer when not receiving'''
+
+        while self.carrier_sense:
+            time.sleep(random.uniform(0.5, 3.0))
+
+        # process transmit buffer
+        if len(self._tx_buffer) > 0:
+            data = self._tx_buffer.pop(0)
+            self.send(data)
+
+        time.sleep(0.1)
+
+
     def _receive(self):
         '''Get next byte from receive MiniModem instance
 
         Always call this function from a thread since the underlying subprocess pipe read will not return until data is available.
-
         Validation of the received byte is performed by attempting to decode the byte and catching any UnicodeDecodeError exceptions.
 
         :return: bytes, received byte string (could be  b'' if a decode error occured)
@@ -317,12 +346,33 @@ class Modem:
         The specified callback function is called once a complete packet is received.
         '''
         data_buffer = b''
+        max_data_buffer_len = 1024
+        carrier_event_symbol = b'###'
 
         while self.online:
             # blocks until next character received
             data_buffer += self._receive()
             
-            if HDLC.START in data_buffer:
+            # detect carrier event
+            if carrier_event_symbol in data_buffer:
+                carrier_event_start = data_buffer.find(carrier_event_symbol) + len(carrier_event_symbol)
+                carrier_event_end = data_buffer.find(carrier_event_symbol, carrier_event_start)
+                if carrier_event_end > 0:
+                    # capture carrier event text
+                    carrier_event = data_buffer[carrier_event_start:carrier_event_end].trim()
+                    # remove carrier event text from buffer
+                    data_buffer = data_buffer[carrier_event_end + len(carrier_event_symbol):]
+
+                    carrier_event_data  = carrier_event.split(b' ')
+                    carrier_event_type = carrier_event_data[0]
+
+                    # set carrier sense state
+                    if carrier_event_type == b'CARRIER':
+                        self.carrier_sense = True
+                    elif carrier_event_type == b'NOCARRIER':
+                        self.carrier_sense = False
+
+            elif HDLC.START in data_buffer:
                 if HDLC.STOP in data_buffer:
                     # delimiters found, capture substring
                     start = data_buffer.find(HDLC.START) + len(HDLC.START)
@@ -344,7 +394,7 @@ class Modem:
                         # remove bad data from beginning of buffer
                         data_buffer = data_buffer[start + len(HDLC.START):]
                 else:
-                    if len(data_buffer) > self.MTU:
+                    if len(data_buffer) > max_data_buffer_len:
                         # no end delimiter and buffer length over max packaet size,
                         # remove data up to last start delimiter in buffer
                         data_buffer = data_buffer[data_buffer.rfind(HDLC.START):]
@@ -354,7 +404,7 @@ class Modem:
                     data_buffer = b''
 
             # simmer down
-            time.sleep(0.1)
+            time.sleep(0.001)
 
 
 
