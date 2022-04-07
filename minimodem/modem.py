@@ -325,12 +325,12 @@ class Modem:
             self._tx_buffer.append(data)
             return None
 
-        if self.verbose:
-            print('Sending: ' + data.decode('utf-8'))
-
         # wrap data in start and stop flags
         data = HDLC.START + data + HDLC.STOP
         self._tx.send(data)
+
+        if self.verbose:
+            print('Sent: ' + data.decode('utf-8'))
 
     def set_rx_callback(self, callback):
         '''Set receive callback function
