@@ -213,6 +213,7 @@ class Modem:
         MTU: int, maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
         carrier_sense : bool, if a carrier signal is being received
         _tx_buffer : list, data to be transmitted (buffered when receiving based on carrier detect)
+        verbose : bool, print received data, sent data, and events
         online: bool, status of the modem
 
     Methods:
@@ -228,7 +229,7 @@ class Modem:
         _stderr_loop(self)
     '''
 
-    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True):
+    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True, verbose=False):
         '''Initialize a Modem class instance
 
         :param alsa_dev_in: str, input ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None)
@@ -237,6 +238,7 @@ class Modem:
         :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: '0x23' = UTF-8 '#')
         :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 1.5)
         :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
+        :param verbose: bool, when True print sent data, received data, and events (optional, default: False)
 
         :return: object, class instance
         '''
@@ -252,6 +254,7 @@ class Modem:
         self.MTU = 500
         self.carrier_sense = False
         self._tx_buffer = []
+        self.verbose = verbose
         self.online = False
 
         # if a separate output device is not specified, assume it is the same as the input device
@@ -272,6 +275,8 @@ class Modem:
         self._rx.start()
         self._tx.start()
         self.online = True
+        if self.verbose:
+            print('Event: modem online')
 
         # start the receive loop as a thread since reads from the child process are blocking
         rx_thread = threading.Thread(target=self._rx_loop)
@@ -291,6 +296,9 @@ class Modem:
     def stop(self):
         '''Stop the modem by stopping the underlying MiniModem instances'''
         self.online = False
+        if self.verbose:
+            print('Event: modem offline')
+
         # use a thread to stop the child process non-blocking-ly
         stop_tx_thread = threading.Thread(target=self._tx.stop)
         stop_tx_thread.daemon = True
@@ -316,6 +324,9 @@ class Modem:
         if self.carrier_sense:
             self._tx_buffer.append(data)
             return None
+
+        if self.verbose:
+            print('Sending: ' + data.decode('utf-8'))
 
         # wrap data in start and stop flags
         data = HDLC.START + data + HDLC.STOP
@@ -386,6 +397,8 @@ class Modem:
                             # under max packet length, receive data
                             if self.rx_callback != None:
                                 self.rx_callback(data)
+                            if self.verbose:
+                                print('Received: ' + data.decode('utf-8'))
                         else:
                             # over max packet length, drop data
                             pass
@@ -434,8 +447,12 @@ class Modem:
                     # set carrier sense state
                     if carrier_event_type == b'CARRIER':
                         self.carrier_sense = True
+                        if self.verbose:
+                            print('Event: carrier detected')
                     elif carrier_event_type == b'NOCARRIER':
                         self.carrier_sense = False
+                        if self.verbose:
+                            print('Event: carrier lost')
 
             else:
                 # avoid missing symbol split over multiple loop iterations
