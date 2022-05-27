@@ -21,10 +21,10 @@ def rx_callback(data):
     print(data.decode('utf-8'))
 
 # find alsa audio device by description (see arecord -l)
-alsa_device = fskmodem.get_alsa_dev('USB PnP')
+alsa_device = fskmodem.get_alsa_device('USB PnP')
 
 # 1200 baud, no sync byte, manual start
-modem = fskmodem.Modem(alsa_dev=alsa_device, baudrate=1200, sync_byte=None, start=False)
+modem = fskmodem.Modem(alsa_dev_in=alsa_device, baudrate=1200, sync_byte=None, start=False)
 modem.set_rx_callback(rx_callback)
 modem.start()
 
