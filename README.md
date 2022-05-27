@@ -1,5 +1,5 @@
 # fskmodem
-Python package for creating a full duplex frequency shift keying (FSK) modem with carrier sense collision avoidance.
+Python package for creating a full duplex frequency shift keying (FSK) soft modem with carrier sense collision avoidance.
 
 ### Example #1
 ```
