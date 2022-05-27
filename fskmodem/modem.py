@@ -43,7 +43,7 @@ class HDLC:
     START = b'|->'
     STOP = b'<-|'
 
-class MiniModem:
+class FSKModem:
     '''Create and interact with a minimodem subprocess
 
     See the minimodem manpage for more information about the application.
@@ -70,7 +70,7 @@ class MiniModem:
     '''
 
     def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, start=True):
-        '''Initialize MiniModem class instance
+        '''Initialize FSKModem class instance
 
         :param mode: str, operating mode of the minimodem application (see module constants)
         :param alsa_dev: str, ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
@@ -198,7 +198,7 @@ class MiniModem:
 
 
 class Modem:
-    '''Create and manage MiniModem RX and TX instances to create a duplex soft modem
+    '''Create and manage FSKModem RX and TX instances to create a duplex soft modem
 
     Attributes:
     
@@ -207,8 +207,8 @@ class Modem:
         baudrate : int, baud rate of the modem
         sync_byte : str, suppress rx carrier detection until byte is received
         confidence : float, minimum confidence threshold based on SNR (i.e. squelch)
-        _rx : object, instance of the MiniModem class
-        _tx : object, instance of the MiniModem class
+        _rx : object, instance of the FSKModem class
+        _tx : object, instance of the FSKModem class
         rx_callback: func, received packet callback function with signature func(data) where data is type bytes
         MTU: int, maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
         carrier_sense : bool, if a carrier signal is being received
@@ -258,9 +258,9 @@ class Modem:
             self.alsa_dev_out = self.alsa_dev_in
 
         # create receive minimodem instance
-        self._rx = MiniModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
+        self._rx = FSKModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
         # create transmit minimodem instance
-        self._tx = MiniModem(TX, self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
+        self._tx = FSKModem(TX, self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
 
         # start the modem now if specified
         if start:
