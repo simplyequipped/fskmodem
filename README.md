@@ -1,6 +1,8 @@
 # fskmodem
 Python package for creating a full duplex frequency shift keying (FSK) soft modem with carrier sense collision avoidance.
 
+Get started with fskmodem for [Reticulum](https://github.com/markqvist/Reticulum) using this [gist](https://gist.github.com/simplyequipped/6c982ebb1ede6e5adfc149be15bbde6b) (requires the [tcpkissserver](https://github.com/simplyequipped/tcpkissserver) package), and be sure to update your Reticulum config file accordingly (see info in the tcpkissserver readme).
+
 ### Example #1
 ```
 import fskmodem
@@ -31,8 +33,14 @@ modem.start()
 modem.send(b'hello world!')
 ```
 
+### Install
+Install the fskmodem package using pip:
+```
+pip install fskmodem
+```
+
 ### Dependencies
-The minimodem package is required and can be installed on Debian based systems using the following command:
+The minimodem package is required and can be installed on Debian systems using apt:
 ```
 apt install minimodem
 ```
