@@ -1,7 +1,6 @@
 # fskmodem
 Python package for creating a full duplex frequency shift keying (FSK) soft modem with carrier sense collision avoidance.
 
-Get started with fskmodem for [Reticulum](https://github.com/markqvist/Reticulum) using this [gist](https://gist.github.com/simplyequipped/6c982ebb1ede6e5adfc149be15bbde6b) (requires the [tcpkissserver](https://github.com/simplyequipped/tcpkissserver) package), and be sure to update your Reticulum config file accordingly (see info in the tcpkissserver readme).
 
 ### Example #1
 ```
@@ -32,6 +31,21 @@ modem.start()
 
 modem.send(b'hello world!')
 ```
+
+### Reticulum
+
+Use fskmodem as a software application with [Reticulum](https://github.com/markqvist/Reticulum) via the PipeInterface by setting the appropriate command in the Reticulum config file (see example below). See the Reticulum [manaul](https://markqvist.github.io/Reticulum/manual/interfaces.html#pipe-interface) for more information.
+
+```
+[[Pipe Interface]]
+  type = PipeInterface
+  interface_enabled = True
+
+  # External command to execute
+  command = python3 -m fskmodem get_alsa_device='USB PnP' baudrate=1200
+```
+
+Alternatively, use fskmodem as a KISS TNC with Reticulum via the TCPClientInterface and the [tcpkissserver](https://github.com/simplyequipped/tcpkissserver) package. See this [gist](https://gist.github.com/simplyequipped/6c982ebb1ede6e5adfc149be15bbde6b) to get started quickly and be sure to update the Reticulum config file accordingly (see tcpkissserver README).
 
 ### Install
 Install the fskmodem package using pip:
