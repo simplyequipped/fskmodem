@@ -50,7 +50,7 @@ if __name__ == '__main__':
             value = str(arg[1]).strip()
 
             if option == 'get_alsa_device' and len(value) > 0:
-                alsa_dev = get_alsa_device(value)
+                alsa_dev = fskmodem.get_alsa_device(value)
                 modem.alsa_dev_in = alsa_dev
             elif option == 'alsa_dev_in':
                 modem.alsa_dev_in = value
