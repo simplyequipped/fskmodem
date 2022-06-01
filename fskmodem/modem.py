@@ -20,7 +20,7 @@ Constants:
 '''
 
 
-import os, subprocess, threading, time, random
+import os, sys, subprocess, threading, time, random
 from subprocess import PIPE, CalledProcessError
 
 
@@ -253,23 +253,20 @@ class Modem:
         self._tx_buffer = []
         self.online = False
 
-        # if a separate output device is not specified, assume it is the same as the input device
-        if self.alsa_dev_out == None:
-            self.alsa_dev_out = self.alsa_dev_in
-
-        # create receive minimodem instance
-        self._rx = FSKModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
-        # create transmit minimodem instance
-        self._tx = FSKModem(TX, self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, start=False)
-
         # start the modem now if specified
         if start:
             self.start()
 
     def start(self):
-        '''Start the modem by starting the underlying MiniModem instances and loop threads'''
-        self._rx.start()
-        self._tx.start()
+        '''Start the modem by starting the underlying FSKModem instances and loop threads'''
+        # if a separate output device is not specified, assume it is the same as the input device
+        if self.alsa_dev_out == None and self.alsa_dev_in != None:
+            self.alsa_dev_out = self.alsa_dev_in
+
+        # create receive minimodem instance
+        self._rx = FSKModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
+        # create transmit minimodem instance
+        self._tx = FSKModem(TX, self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
@@ -288,7 +285,7 @@ class Modem:
         job_thread.start()
 
     def stop(self):
-        '''Stop the modem by stopping the underlying MiniModem instances'''
+        '''Stop the modem by stopping the underlying FSKModem instances'''
         self.online = False
 
         # use a thread to stop the child process non-blocking-ly
@@ -301,7 +298,7 @@ class Modem:
         stop_rx_thread.start()
 
     def send(self, data):
-        '''Send data to the underlying transmit MiniModem instance after wrapping data with HDLC flags
+        '''Send data to the underlying transmit FSKModem instance after wrapping data with HDLC flags
 
         If receiving (a carrier event occured), buffer the data to transmit later
 
@@ -489,6 +486,102 @@ def get_alsa_device(device_desc, device_mode=RX):
             break
 
     return alsa_dev
+
+
+
+# if package is run directly, start the modem using command line arguments
+# Reticulum PipeInterface operation is assumed
+if __name__ == '__main__':
+
+    modem = Modem(start=False)
+
+    def rx_callback(data):
+        sys.stdout.write(data.decode('utf-8'))
+        sys.stdout.flush()
+
+    def read_stdin():
+        in_frame = False
+        escape = False
+        data_buffer = b''
+        hdlc_flag = 0x7E 
+        hdlc_esc = 0x7D
+        hdlc_esc_mask = 0x20
+
+        while modem.online:
+            byte = sys.stdin.buffer.read(1)
+
+            if len(byte):
+                if in_frame and byte == hdlc_flag:
+                    in_frame = False
+                    modem.send(data_buffer)
+                elif byte == hdlc_flag:
+                    in_frame = True
+                    data_buffer = b''
+                elif in_frame and len(data_buffer) < modem.MTU:
+                    if byte == hdlc.esc:
+                        escape = True
+                    else:
+                        if escape:
+                            if byte == hdlc_flag ^ hdlc_esc_mask:
+                                byte = hdlc_flag
+                            if byte == hdlc_esc ^ hdlc_esc_mask:
+                                byte = hdlc_esc
+                            escape = False
+
+                        data_buffer += byte
+                        
+    
+    if len(sys.argv) > 1:
+        for arg in sys.argv[1:]:
+            arg = arg.split('=')
+            option = str(arg[0]).strip()
+            value = str(arg[1]).strip()
+
+            if option == 'get_alsa_device' and len(value) > 0:
+                alsa_dev = get_alsa_device(value)
+                modem.alsa_dev_in = alsa_dev
+            elif option == 'alsa_dev_in':
+                modem.alsa_dev_in = value
+            elif option == 'alsa_dev_out':
+                modem.alsa_dev_out = value
+            elif option == 'baudrate':
+                modem.baudrate = value
+            elif option == 'sync_byte':
+                modem.sync_byte = value
+            elif option == 'confidence':
+                modem.confidence = value
+
+    modem.set_rx_callback(rx_callback)
+    modem.start()
+    
+    time.sleep(0.1)
+    
+    thread = threading.Thread(target=read_stdin)
+    thread.setDaemon(True)
+    thread.start()
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
