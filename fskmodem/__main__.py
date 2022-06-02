@@ -1,11 +1,8 @@
-import sys, time, threading, atexit
+import sys, time, threading
 import fskmodem
 
 # if package is run directly, start the modem using command line arguments
 # Reticulum PipeInterface operation is assumed
-
-def exit_handler():
-    modem.stop()
 
 def rx_callback(data):
     sys.stdout.write(data.decode('utf-8'))
@@ -19,9 +16,8 @@ def read_stdin():
     hdlc_esc = 0x7D
     hdlc_esc_mask = 0x20
 
-    print('modem online: ' + str(modem.online))
     while modem.online:
-        byte = sys.stdin.buffer.read(1)
+        byte = ord(sys.stdin.read(1))
 
         if len(byte):
             if in_frame and byte == hdlc_flag:
@@ -67,10 +63,14 @@ if __name__ == '__main__':
             elif option == 'confidence':
                 modem.confidence = value
 
-    atexit.register(exit_handler)
     modem.set_rx_callback(rx_callback)
     modem.start()
     time.sleep(0.1)
-    read_stdin()
+    thread = threading.Thread(target=read_stdin)
+    thread.setDaemon = True
+    thread.start()
+
+    while modem.online:
+        time.sleep(0.1)
 
     
