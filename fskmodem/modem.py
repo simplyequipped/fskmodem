@@ -20,7 +20,7 @@ Constants:
 '''
 
 
-import os, sys, subprocess, threading, time, random
+import os, sys, subprocess, threading, time, random, atexit
 from subprocess import PIPE, CalledProcessError
 
 
@@ -125,7 +125,7 @@ class FSKModem:
 
         if start:
             self.start()
-
+        
     def start(self):
         '''Start the modem by creating the appropriate subprocess with the given parameters'''
         if not self.online:
@@ -253,7 +253,10 @@ class Modem:
         self._tx_buffer = []
         self.online = False
 
-        # start the modem now if specified
+        # configure exit handler
+        atexit.register(self.stop)
+
+        # start the modem if specified
         if start:
             self.start()
 
@@ -289,13 +292,15 @@ class Modem:
         self.online = False
 
         # use a thread to stop the child process non-blocking-ly
-        stop_tx_thread = threading.Thread(target=self._tx.stop)
-        stop_tx_thread.daemon = True
-        stop_tx_thread.start()
+        if self._tx != None:
+            stop_tx_thread = threading.Thread(target=self._tx.stop)
+            stop_tx_thread.daemon = True
+            stop_tx_thread.start()
         # use a thread to stop the child process non-blocking-ly
-        stop_rx_thread = threading.Thread(target=self._rx.stop)
-        stop_rx_thread.daemon = True
-        stop_rx_thread.start()
+        if self._rx != None:
+            stop_rx_thread = threading.Thread(target=self._rx.stop)
+            stop_rx_thread.daemon = True
+            stop_rx_thread.start()
 
     def send(self, data):
         '''Send data to the underlying transmit FSKModem instance after wrapping data with HDLC flags
