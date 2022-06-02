@@ -17,10 +17,10 @@ def read_stdin():
     hdlc_esc_mask = 0x20
 
     while modem.online:
-        byte = sys.stdin.read(1)
+        byte = sys.stdin.buffer.read(1)
 
         if len(byte):
-            byte = ord(byte)
+            #byte = ord(byte)
 
             if in_frame and byte == hdlc_flag:
                 in_frame = False
