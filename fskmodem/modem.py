@@ -358,15 +358,16 @@ class Modem:
 
         while self.online:
             while self.carrier_sense:
-                time.sleep(random.uniform(0.5, 3.0))
+                time.sleep(0.01) # 10 milliseconds
+
+            # random delay (100 - 250 milliseconds) before transmitting to avoid collisions
+            time.sleep(random.uniform(0.10, 0.25))
 
             # process next item in transmit buffer
             if len(self._tx_buffer) > 0:
                 data = self._tx_buffer.pop(0)
                 self.send(data)
     
-            time.sleep(0.1)
-
     def _rx_loop(self):
         '''Receive data into a buffer and find data packets
 
