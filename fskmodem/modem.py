@@ -209,7 +209,8 @@ class Modem:
         confidence : float, minimum confidence threshold based on SNR (i.e. squelch)
         _rx : object, instance of the FSKModem class
         _tx : object, instance of the FSKModem class
-        rx_callback: func, received packet callback function with signature func(data) where data is type bytes
+        rx_callback: func, received packet callback function with signature func(data, confidence)
+                           where data is type bytes and confidence is type float
         MTU: int, maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
         carrier_sense : bool, if a carrier signal is being received
         _tx_buffer : list, data to be transmitted (buffered when receiving based on carrier detect)
@@ -233,9 +234,11 @@ class Modem:
         '''Initialize a Modem class instance
 
         :param alsa_dev_in: str, input ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None)
-        :param alsa_dev_out: str, output ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None, if None alsa_dev_out is set to alsa_dev_in)
+        :param alsa_dev_out: str, output ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None,
+                                if None alsa_dev_out is set to alsa_dev_in)
         :param baudrate: int, baud rate of the modem (optional, default: 300)
-        :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: '0x23' = UTF-8 '#')
+        :param sync_byte: str, suppress rx carrier detection until byte is received (optional,
+                               default: '0x23' = UTF-8 '#')
         :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 1.5)
         :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
         :return: object, class instance
@@ -328,7 +331,7 @@ class Modem:
     def set_rx_callback(self, callback):
         '''Set receive callback function
 
-        :param callback: func, function to call when packet is received (signature: func(data) where data is type bytes)
+        :param callback: func, function to call when packet is received (signature: func(data, confidence) where data is type bytes and confidence is type float)
         '''
         self.rx_callback = callback
 
