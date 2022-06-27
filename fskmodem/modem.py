@@ -214,6 +214,7 @@ class Modem:
         carrier_sense : bool, if a carrier signal is being received
         _tx_buffer : list, data to be transmitted (buffered when receiving based on carrier detect)
         online: bool, status of the modem
+        _rx_confidence: dict, received data confidence and timestamp
 
     Methods:
 
@@ -252,6 +253,7 @@ class Modem:
         self.carrier_sense = False
         self._tx_buffer = []
         self.online = False
+        self._rx_confidence = {'confidence': 0.0, 'timestamp': 0}
 
         # configure exit handler
         atexit.register(self.stop)
@@ -384,10 +386,23 @@ class Modem:
                         # remove received data from buffer
                         data_buffer = data_buffer[end + len(HDLC.STOP):]
                         
+                        # under max packet length, receive data
                         if len(data) <= self.MTU:
-                            # under max packet length, receive data
+                            # wait for confidence data to be available
+                            #TODO test timeout duration on a slow platform (i.e Raspberry Pi)
+                            if self._rx_confidence['timestamp'] == 0:
+                                timeout = 0.100 # 100 milliseconds
+                                start_time = time.time()
+                                while self._rx_confidence['timestamp'] == 0 and time.time() < (start_time + timeout):
+                                    time.sleep(0.001) # 1 millisecond
+
                             if self.rx_callback != None:
-                                self.rx_callback(data)
+                                self.rx_callback(data, self._rx_confidence['confidence'])
+
+                            # reset confidence data to avoid reuse
+                            self._rx_confidence['confidence'] = 0.0
+                            self._rx_confidence['timestamp'] = 0
+
                         else:
                             # over max packet length, drop data
                             pass
@@ -404,6 +419,15 @@ class Modem:
                 # avoid missing start delimiter split over multiple loop iterations
                 if len(data_buffer) > 10 * len(HDLC.START):
                     data_buffer = b''
+
+            #TODO test timeout duration on a slow platform (i.e Raspberry Pi)
+            # if confidence data is stale (> 100 milliseconds old) discard it
+            if (
+                self._rx_confidence['timestamp'] != 0 and
+                self._rx_confidence['timestamp'] < (time.time() - 0.100)
+            ):
+                self._rx_confidence['confidence'] = 0.0
+                self._rx_confidence['timestamp'] = 0
 
             # simmer down
             time.sleep(0.001)
@@ -438,6 +462,22 @@ class Modem:
                         self.carrier_sense = True
                     elif carrier_event_type == b'NOCARRIER':
                         self.carrier_sense = False
+
+                        # find confidence data in no-carrier event
+                        for data in carrier_event_data:
+                            if b'confidence' in data:
+                                carrier_confidence = data.split(b'=')
+                                carrier_confidence = carrier_confidence[1]
+                                break
+
+                        # try to decode and record confidence data
+                        try:
+                            carrier_confidence = float(carrier_confidence.decode('utf-8'))
+                            self._rx_confidence['confidence'] = carrier_confidence
+                            self._rx_confidence['timestamp'] = time.time()
+                        except:
+                            # discard on failure to decode or cast to float
+                            pass
 
             else:
                 # avoid missing symbol split over multiple loop iterations
