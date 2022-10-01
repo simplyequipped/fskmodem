@@ -353,7 +353,7 @@ class Modem:
 
         while self.online:
             while self.carrier_sense:
-                time.sleep(random.uniform(0.5, 3.0))
+                time.sleep(random.uniform(0.5, 2.0))
 
             # process next item in transmit buffer
             if len(self._tx_buffer) > 0:
