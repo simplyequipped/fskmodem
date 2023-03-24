@@ -1,5 +1,13 @@
 import sys, time, threading
 import fskmodem
+import os
+
+log_file_path = os.path.join(os.path.expanduser('~'), 'fskmodem.log')
+
+def log(data):
+    with open(log_file_path, 'a') as log_file:
+        log_file.write(str(data) + '\n')
+    
 
 # if package is run directly, start the modem using command line arguments
 # Reticulum PipeInterface operation is assumed
@@ -17,13 +25,15 @@ def read_stdin():
     hdlc_esc_mask = 0x20
 
     while modem.online:
-        byte = sys.stdin.buffer.read(1)
+        byte = sys.stdin.read(1)
+        log(byte)
 
         if len(byte):
             #byte = ord(byte)
 
             if in_frame and byte == hdlc_flag:
                 in_frame = False
+                log(data_buffer.hex())
                 modem.send(data_buffer)
             elif byte == hdlc_flag:
                 in_frame = True
@@ -44,6 +54,7 @@ def read_stdin():
 if __name__ == '__main__':
 
     modem = fskmodem.Modem(start=False)
+    log('modem created')
                         
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
@@ -67,6 +78,7 @@ if __name__ == '__main__':
 
     modem.set_rx_callback(rx_callback)
     modem.start()
+    log('modem started')
     time.sleep(0.1)
     thread = threading.Thread(target=read_stdin)
     thread.setDaemon = True
@@ -75,4 +87,4 @@ if __name__ == '__main__':
     while modem.online:
         time.sleep(0.1)
 
-    
+    modem.stop()    
