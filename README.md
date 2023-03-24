@@ -34,6 +34,7 @@ modem.send(b'hello world!')
 
 ### Reticulum
 
+<!---
 Use fskmodem as a software application with [Reticulum](https://github.com/markqvist/Reticulum) via the PipeInterface by setting the appropriate command in the Reticulum config file (see example below). See the Reticulum [manaul](https://markqvist.github.io/Reticulum/manual/interfaces.html#pipe-interface) for more information.
 
 ```
@@ -44,22 +45,23 @@ Use fskmodem as a software application with [Reticulum](https://github.com/markq
   # External command to execute
   command = python3 -m fskmodem get_alsa_device='USB PnP' baudrate=1200
 ```
+--->
 
-Alternatively, use fskmodem as a KISS TNC with Reticulum via the TCPClientInterface and the [tcpkissserver](https://github.com/simplyequipped/tcpkissserver) package. See this [gist](https://gist.github.com/simplyequipped/6c982ebb1ede6e5adfc149be15bbde6b) to get started quickly and be sure to update the Reticulum config file accordingly (see tcpkissserver README).
+Use *fskmodem* as a KISS TNC with Reticulum via the TCPClientInterface and the [tcpkissserver](https://github.com/simplyequipped/tcpkissserver) package. See [this gist](https://gist.github.com/simplyequipped/6c982ebb1ede6e5adfc149be15bbde6b) to get started quickly and be sure to update the Reticulum config file accordingly (see tcpkissserver README).
 
 ### Install
-Install the fskmodem package using pip:
+Install the *fskmodem* package using pip (or pip3 if needed):
 ```
 pip install fskmodem
 ```
 
 ### Dependencies
-The minimodem package is required and can be installed on Debian systems using apt:
+The *minimodem* package is required and can be installed on Debian systems using apt:
 ```
-apt install minimodem
+sudo apt install minimodem
 ```
 
 ### Credits
 
-The minimodem Unix application is developed by Kamal Mostafa
+The *minimodem* Unix application is developed by Kamal Mostafa
 [http://www.whence.com/minimodem/](http://www.whence.com/minimodem/)
