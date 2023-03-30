@@ -1,54 +1,81 @@
+import time
+import threading
 
 import pyaudio
 import numpy as np
 
-# Setup audio parameters
-BIT_RATE = 44100
-FREQ_HIGH = 1200
-FREQ_LOW = 800
-BIT_DURATION = 0.1
+#TODO
+# - add NRZI encode/decode
+# - add framing bits
+# - add sync bit
+# - add bit stuffing encode/decode
+#
+# http://n1vg.net/packet/
 
-# Create audio stream
-p = pyaudio.PyAudio()
-stream = p.open(format=pyaudio.paFloat32, channels=1, rate=BIT_RATE, output=True)
+class FSKModem:
+    def __init__(self, audio_bit_rate=44100):
+        # Setup audio parameters
+        self.bit_rate = audio_bit_rate
+        self.bit_duration = 0.1
+        self.mark_freq = 1270
+        self.space_freq = 1070
+        
+        self._tx_buffer = b''
+        self._rx_buffer = b''
+        
+        # Create audio stream
+        #TODO select audio device
+        p = pyaudio.PyAudio()
+        self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=self.bit_rate, output=True)
 
-# Modulate binary data into audio frequency shifts
-def modulate(b):
-    freq = FREQ_HIGH if b == 1 else FREQ_LOW
-    samples = int(BIT_RATE * BIT_DURATION)
-    t = np.linspace(0, BIT_DURATION, samples, endpoint=False)
-    waveform = np.sin(2 * np.pi * freq * t)
-    return waveform
+    # Modulate binary data into audio frequency shifts
+    def modulate(self, b):
+        freq = self.mark_freq if b == 1 else self.space_frew
+        samples = int(self.bit_rate * self.bit_duration)
+        t = np.linspace(0, self.bit_duration, samples, endpoint=False)
+        waveform = np.sin(2 * np.pi * freq * t)
+        return waveform
 
+    # Demodulate audio frequency shifts into binary data
+    def demodulate(self, samples):
+        spectrum = np.fft.fft(samples)
+        freqs = np.fft.fftfreq(samples.size, d=1 / self.bit_rate)
+        pos_amplitude = np.abs(spectrum[freqs > 0])
+        neg_amplitude = np.abs(spectrum[freqs < 0])
+        high_amp = np.mean(pos_amplitude[freqs[freqs > 0] > self.mark_freq])
+        low_amp = np.mean(pos_amplitude[freqs[freqs > 0] > self.space_freq])
+        return high_amp > low_amp
 
-# Demodulate audio frequency shifts into binary data
-def demodulate(samples):
-    spectrum = np.fft.fft(samples)
-    freqs = np.fft.fftfreq(samples.size, d=1 / BIT_RATE)
-    pos_amplitude = np.abs(spectrum[freqs > 0])
-    neg_amplitude = np.abs(spectrum[freqs < 0])
-    high_amp = np.mean(pos_amplitude[freqs[freqs > 0] > FREQ_HIGH])
-    low_amp = np.mean(pos_amplitude[freqs[freqs > 0] > FREQ_LOW])
-    return high_amp > low_amp
+    def nrzi_encode(self, bytes_to_send):
+        pass
+    
+    def nrzi_decode(self, binary_data):
+        pass
+    
+    # Send binary data over audio stream
+    def send_bytes(self, bytes_to_send):
+        for b in bytes_to_send:
+            waveform = modulate(b)
+            self.stream.write(waveform.astype(np.float32).tobytes())
 
-
-# Send binary data over audio stream
-def send_bytes(bytes_to_send):
-    for b in bytes_to_send:
-        waveform = modulate(b)
-        stream.write(waveform.astype(np.float32).tobytes())
-
-# Receive binary data from audio stream
-def receive_bytes(bytes_to_receive):
-    binary_data = []
-    samples_per_bit = int(BIT_RATE * BIT_DURATION)
-    for i in range(bytes_to_receive):
-        samples = np.frombuffer(stream.read(samples_per_bit), dtype=np.float32)
-        binary_data.append(demodulate(samples))
-    return np.array(binary_data, dtype=np.uint8)
+    # Receive binary data from audio stream
+    def receive_bytes(self, bytes_to_receive=1):
+        binary_data = []
+        samples_per_bit = int(self.bit_rate * self.bit_duration)
+        for i in range(bytes_to_receive):
+            samples = np.frombuffer(self.stream.read(samples_per_bit), dtype=np.float32)
+            binary_data.append(demodulate(samples))
+            
+        return np.array(binary_data, dtype=np.uint8)
+    
+    def _rx_loop(self):
+        while True:
+            
+            time.sleep(0.1)
 
 
 # Example usage
-send_bytes([1, 0, 1, 1, 0])
-received_bytes = receive_bytes(5)
+modem = FSKModem()
+modem.send_bytes([1, 0, 1, 1, 0])
+received_bytes = modem.receive_bytes(1)
 print(received_bytes)
