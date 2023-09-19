@@ -112,11 +112,11 @@ class FSKModem:
         switch_sync_byte = ''
         switch_filter = ' --print-filter'
 
-        if self.alsa_dev != None:
+        if self.alsa_dev is not None:
             switch_alsa_dev = ' --alsa=' + str(self.alsa_dev)
-        if self.confidence != None:
+        if self.confidence is not None:
             switch_confidence = ' --confidence ' + str(self.confidence)
-        if self.sync_byte != None:
+        if self.sync_byte is not None:
             switch_sync_byte = ' --sync-byte ' + str(self.sync_byte)
 
         switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_filter]
@@ -164,7 +164,7 @@ class FSKModem:
 
         :param data: bytes, byte string of data to send to the subprocess pipe
         '''
-        if self.sync_byte != None:
+        if self.sync_byte is not None:
             data = self.sync_byte.encode('utf-8') + data
 
         self.process.stdin.write(data)
@@ -249,6 +249,7 @@ class Modem:
         self.baudrate = baudrate
         self.sync_byte = sync_byte
         self.confidence = confidence
+        self._ptt = None
         self._rx = None
         self._tx = None
         self.rx_callback = None
@@ -268,7 +269,7 @@ class Modem:
     def start(self):
         '''Start the modem by starting the underlying FSKModem instances and loop threads'''
         # if a separate output device is not specified, assume it is the same as the input device
-        if self.alsa_dev_out == None and self.alsa_dev_in != None:
+        if self.alsa_dev_out == None and self.alsa_dev_in is not None:
             self.alsa_dev_out = self.alsa_dev_in
 
         # create receive minimodem instance
@@ -297,12 +298,12 @@ class Modem:
         self.online = False
 
         # use a thread to stop the child process non-blocking-ly
-        if self._tx != None:
+        if self._tx is not None:
             stop_tx_thread = threading.Thread(target=self._tx.stop)
             stop_tx_thread.daemon = True
             stop_tx_thread.start()
         # use a thread to stop the child process non-blocking-ly
-        if self._rx != None:
+        if self._rx is not None:
             stop_rx_thread = threading.Thread(target=self._rx.stop)
             stop_rx_thread.daemon = True
             stop_rx_thread.start()
@@ -326,7 +327,16 @@ class Modem:
 
         # wrap data in start and stop flags
         data = HDLC.START + data + HDLC.STOP
+
+        # toggle ptt
+        if self._ptt is not None:
+            self._ptt
+        
         self._tx.send(data)
+
+        # toggle ptt
+        if self._ptt is not None:
+            self._ptt
 
     def set_rx_callback(self, callback):
         '''Set receive callback function
@@ -335,6 +345,14 @@ class Modem:
         '''
         self.rx_callback = callback
 
+    def set_ptt_callback(self, callback):
+        '''
+        '''
+        if callable(callback):
+            self._ptt = callback
+        else:
+            raise TypeError('Specified callback object is not callable')
+    
     def _receive(self):
         '''Get next byte from receive MiniModem instance
 
@@ -401,7 +419,7 @@ class Modem:
                                 while self._rx_confidence['timestamp'] == 0 and time.time() < (start_time + timeout):
                                     time.sleep(0.001) # 1 millisecond
 
-                            if self.rx_callback != None:
+                            if self.rx_callback is not None:
                                 self.rx_callback(data, self._rx_confidence['confidence'])
 
                             # reset confidence data to avoid reuse
