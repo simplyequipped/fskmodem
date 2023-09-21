@@ -1,33 +1,42 @@
+#TODO
+# - add license
+# - separate outgoing buffering and buffer processing jobs (see send_raw function)
+# - separate rx and tx fskmodem classes
+
+
 '''A full duplex FSK soft modem utilizing the Unix application minimodem
 
 The minimodem application can be installed on Debian systems with the command:
     sudo apt install minimodem
 
 Classes:
-
     HDLC
     MiniModem
     Modem
 
 Functions:
-
     get_alsa_device(device_desc[, device_mode=RX]) -> str
 
 Constants:
-
     RX
     TX
 '''
 
-
-import os, sys, subprocess, threading, time, random, atexit
+import os
+import sys
+import subprocess
+import threading
+import time
+import random
+import atexit
+import shutil
 from subprocess import PIPE, CalledProcessError
-
 
 
 # Package constants
 RX = 'rx'
 TX = 'tx'
+
 
 class HDLC:
     '''Defines packet framing flags similar to HDLC or PPP.
@@ -70,21 +79,19 @@ class FSKModem:
     '''
 
     def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, start=True):
-        '''Initialize FSKModem class instance
+        '''Initialize FSKModem class instance.
 
-        :param mode: str, operating mode of the minimodem application (see module constants)
-        :param alsa_dev: str, ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
-        :param baudrate: int, baud rate of the modem (optional, default: 300)
-        :param sync_byte: str, suppress rx carrier detection until byte is received (optional, default: None, ex. '0x23' = UTF-8 '#')
-        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: None, ex. 2.0)
-        :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
+        Args:
+            mode (str): Operating mode of the minimodem application (see module constants)
+            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
+            confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
+            start (bool): Start minimodem subprocess on object instantiation, defaults to True
 
-        :return: object, class instance
-
-        :raises: ValueError, if mode is not one of the module constants (RX, TX)
-        :raises: ProcessLookupError, if the minimodem application is not installed
+        Returns:
+            fskmodem.FSKModem: FSKModem instance object
         '''
-
         if mode in [RX, TX]:
             self.mode = mode
         else:
@@ -100,7 +107,7 @@ class FSKModem:
 
         try:
             # get full path of minimodem binary
-            exec_path = subprocess.check_output(['which', 'minimodem']).decode('utf-8').strip()
+            exec_path = shutil.which('minimodem')
         except CalledProcessError:
             raise ProcessLookupError('minimodem application not installed, try: sudo apt install minimodem')
 
@@ -127,14 +134,14 @@ class FSKModem:
             self.start()
         
     def start(self):
-        '''Start the modem by creating the appropriate subprocess with the given parameters'''
+        '''Start minimodem subprocess.'''
         if not self.online:
             # create subprocess with pipes for interaction with child process
             self.process = subprocess.Popen(self.shell_cmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=PIPE)
             self.online = True
 
     def stop(self):
-        '''Stop the modem by terminating or killing the subprocess'''
+        '''Stop minimodem subprocess.'''
         self.online = False
         # try to terminate normally
         self.process.terminate()
@@ -158,11 +165,12 @@ class FSKModem:
             comm_thread.start()
 
     def send(self, data):
-        '''Send data to the underlying minimodem subprocess
+        '''Send data to the minimodem subprocess.
 
-        This method is only used with transmit mode (mode = minimodem.TX)
+        This method is only used with transmit mode (mode = minimodem.TX).
 
-        :param data: bytes, byte string of data to send to the subprocess pipe
+        Args:
+            data (int): byte string to send to the subprocess pipe
         '''
         if self.sync_byte is not None:
             data = self.sync_byte.encode('utf-8') + data
@@ -171,93 +179,86 @@ class FSKModem:
         self.process.stdin.flush()
 
     def receive(self, size=1):
-        '''Receive data from the underlying minimodem subprocess
+        '''Receive data from minimodem subprocess.
 
         Reading from the subprocess.Popen.stdout pipe is blocking until the specified number of bytes is available.
 
-        This method is only used with receive mode (mode = minimodem.RX)
+        This method is only used with receive mode (mode = minimodem.RX).
 
-        :param size: int, number of bytes to read from the subprocess pipe
+        Args:
+            size (int): Number of bytes to read from the subprocess pipe
 
-        :return: bytes, received byte string of specified length
+        Returns:
+            bytes: Received byte string of specified length
         '''
         return self.process.stdout.read(size)
 
     def _get_stderr(self, size=1):
-        '''Get stderr data from the underlying minimodem subprocess
+        '''Get stderr data from minimodem subprocess.
 
         Reading from the subprocess.Popen.stderr pipe is blocking until the specified number of bytes is available.
 
-        This method is only used with receive mode (mode = minimodem.RX)
+        This method is only used with receive mode (mode = minimodem.RX).
 
-        :param size: int, number of bytes to read from the subprocess pipe
+        Args:
+            size (int): Number of bytes to read from the subprocess pipe
 
-        :return: bytes, received byte string of specified length
+        Returns:
+            bytes: Received byte string of specified length
         '''
         return self.process.stderr.read(size)
 
 
 class Modem:
-    '''Create and manage FSKModem RX and TX instances to create a duplex soft modem
+    '''Create and manage a soft FSK modem.
 
     Attributes:
-    
-        alsa_dev_in : str, input ALSA device formated as 'card,device' (ex. '2,0')
-        alsa_dev_out : str, output ALSA device formated as 'card,device' (ex. '2,0')
-        baudrate : int, baud rate of the modem
-        sync_byte : str, suppress rx carrier detection until byte is received
-        confidence : float, minimum confidence threshold based on SNR (i.e. squelch)
-        _rx : object, instance of the FSKModem class
-        _tx : object, instance of the FSKModem class
-        rx_callback: func, received packet callback function with signature func(data, confidence)
-                           where data is type bytes and confidence is type float
-        MTU: int, maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
-        carrier_sense : bool, if a carrier signal is being received
-        _tx_buffer : list, data to be transmitted (buffered when receiving based on carrier detect)
-        online: bool, status of the modem
-        _rx_confidence: dict, received data confidence and timestamp
-
-    Methods:
-
-        __init__(self[, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, start=True])
-        start(self)
-        stop(self)
-        send(self, data)
-        set_rx_callback(callback)
-        _receive(self[, size=1])
-        _job_loop(self)
-        _rx_loop(self)
-        _stderr_loop(self)
+        alsa_dev_in (str): Input ALSA device formated as 'card,device' (ex. '2,0')
+        alsa_dev_out (str): Output ALSA device formated as 'card,device' (ex. '2,0')
+        baudrate (int): Baudrate of the modem, defaults to 300 baud
+        sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (UTF-8 '#')
+        confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
+        MTU (int): Maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
+        online (bool): True if modem subprocesses are running, False otherwise
+        carrier_sense (bool): True if incoming carrier detected, False otherwise
     '''
 
-    def __init__(self, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True):
-        '''Initialize a Modem class instance
+    def __init__(self, alsa_dev=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True):
+        '''Initialize Modem class instance.
 
-        :param alsa_dev_in: str, input ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None)
-        :param alsa_dev_out: str, output ALSA device formated as 'card,device' (ex. '2,0') (optional, default: None,
-                                if None alsa_dev_out is set to alsa_dev_in)
-        :param baudrate: int, baud rate of the modem (optional, default: 300)
-        :param sync_byte: str, suppress rx carrier detection until byte is received (optional,
-                               default: '0x23' = UTF-8 '#')
-        :param confidence: float, minimum confidence threshold based on SNR (i.e. squelch, optional, default: 1.5)
-        :param start: bool, start the modem subprocess on object instantiation (optional, default: True)
-        :return: object, class instance
+        If the input and output ALSA devices are the same device, use *alsa_dev*. Otherwise, use *alsa_dev_in* and *alsa_dev_out* to specifiy different devices for input and output.
+
+        Args:
+            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev_in (str): Input ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev_out (str): Output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (UTF-8 '#')
+            confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
+            start (bool): Start modem subprocesses on object instantiation, defaults to True
+
+        Returns:
+            fskmodem.Modem: Modem instance object
         '''
-
-        self.alsa_dev_in = alsa_dev_in
-        self.alsa_dev_out = alsa_dev_out
+        if alsa_dev is None:
+            self.alsa_dev_in = alsa_dev_in
+            self.alsa_dev_out = alsa_dev_out
+        else:
+            self.alsa_dev_in = alsa_dev
+            self.alsa_dev_out = alsa_dev
+        
         self.baudrate = baudrate
         self.sync_byte = sync_byte
         self.confidence = confidence
-        self._ptt = None
+        self.MTU = 500
+        self.online = False
+        self.carrier_sense = False
+        self._rx_callback = None
+        self._toggle_ptt_callback = None
+        self._rx_confidence = {'confidence': 0.0, 'timestamp': 0}
+        self._tx_buffer = []
         self._rx = None
         self._tx = None
-        self.rx_callback = None
-        self.MTU = 500
-        self.carrier_sense = False
-        self._tx_buffer = []
-        self.online = False
-        self._rx_confidence = {'confidence': 0.0, 'timestamp': 0}
 
         # configure exit handler
         atexit.register(self.stop)
@@ -267,11 +268,7 @@ class Modem:
             self.start()
 
     def start(self):
-        '''Start the modem by starting the underlying FSKModem instances and loop threads'''
-        # if a separate output device is not specified, assume it is the same as the input device
-        if self.alsa_dev_out == None and self.alsa_dev_in is not None:
-            self.alsa_dev_out = self.alsa_dev_in
-
+        '''Start modem monitoring loops and underlying FSKModem instances.'''
         # create receive minimodem instance
         self._rx = FSKModem(RX, self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
         # create transmit minimodem instance
@@ -294,7 +291,7 @@ class Modem:
         job_thread.start()
 
     def stop(self):
-        '''Stop the modem by stopping the underlying FSKModem instances'''
+        '''Stop modem and underlying processes.'''
         self.online = False
 
         # use a thread to stop the child process non-blocking-ly
@@ -309,16 +306,33 @@ class Modem:
             stop_rx_thread.start()
 
     def send(self, data):
-        '''Send data to the underlying transmit FSKModem instance after wrapping data with HDLC flags
+        '''Encode and send data via the underlying transmit FSKModem instance.
+        
+        Data is UTF-8 encoded to bytes and wrapped with HDLC flags prior to transmitting.
 
-        If receiving (a carrier event occured), buffer the data to transmit later
+        If actively receiving (a carrier event has occured), outgoing data is buffered for later transmission.
 
-        :param data: bytes, byte string of data to send
+        Args:
+            data (str): data to send
+        '''
+        data = data.encode('utf-8')
+        self.send_raw(data)
+    
+    def send_raw(self, data):
+        '''Send data via the underlying transmit FSKModem instance.
+        
+        Data is wrapped with HDLC flags prior to transmitting.
 
-        :raises: TypeError, if data is not type bytes
+        If actively receiving (a carrier event has occured), outgoing data is buffered for later transmission.
+
+        Args:
+            data (bytes): data to send
+
+        Raises:
+            TypeError: specified data is not type bytes
         '''
         if type(data) != bytes:
-            raise TypeError('Modem data must be type bytes, ' + str(type(data)) + ' given.')
+            raise TypeError('Raw data must be of type bytes, not: {}'.format(str(type(data)))
             return None
 
         if self.carrier_sense:
@@ -330,36 +344,47 @@ class Modem:
 
         # toggle ptt
         if self._ptt is not None:
-            self._ptt
+            self._toggle_ptt_callback()
         
         self._tx.send(data)
 
         # toggle ptt
         if self._ptt is not None:
-            self._ptt
+            self._toggle_ptt_callback()
 
     def set_rx_callback(self, callback):
-        '''Set receive callback function
+        '''Set incoming packet callback function.
+            
+        Callback function signature:
+        function(data, confidence) where *data* is type *bytes* and *confidence* is type *float*
 
-        :param callback: func, function to call when packet is received (signature: func(data, confidence) where data is type bytes and confidence is type float)
+        Args:
+            callback (function): Function to call when a packet is received
         '''
-        self.rx_callback = callback
+        self._rx_callback = callback
 
     def set_ptt_callback(self, callback):
-        '''
+        '''Set PTT toggle callback function.
+
+        Args:
+            callback (function): Function to call to toggle radio PTT state
+
+        Raises:
+            TypeError: Specified callback object is not callable
         '''
         if callable(callback):
-            self._ptt = callback
+            self._toggle_ptt_callback = callback
         else:
             raise TypeError('Specified callback object is not callable')
     
     def _receive(self):
-        '''Get next byte from receive MiniModem instance
+        '''Get next byte from receive MiniModem instance.
 
         Always call this function from a thread since the underlying subprocess pipe read will not return until data is available.
         Validation of the received byte is performed by attempting to decode the byte and catching any UnicodeDecodeError exceptions.
 
-        :return: bytes, received byte string (could be  b'' if a decode error occured)
+        Returns:
+            bytes: Received byte string (could be  b'' if a decode error occured)
         '''
         data = self._rx.receive()
 
@@ -372,7 +397,7 @@ class Modem:
         return data
 
     def _job_loop(self):
-        '''Process data in the transmit buffer when not receiving'''
+        '''Process data in the transmit buffer when not receiving.'''
 
         while self.online:
             while self.carrier_sense:
@@ -388,9 +413,9 @@ class Modem:
                 self.send(data)
     
     def _rx_loop(self):
-        '''Receive data into a buffer and find data packets
+        '''Receive incoming bytes into a buffer and find data packets.
 
-        The specified callback function is called once a complete packet is received.
+        The configured rx callback function is called once a complete packet is received.
         '''
         data_buffer = b''
         max_data_buffer_len = 1024
@@ -456,7 +481,7 @@ class Modem:
             time.sleep(0.001)
 
     def _stderr_loop(self):
-        '''Receive stderr data into a buffer and find carrier events
+        '''Receive stderr data from the MiniModem process into a buffer and identify carrier events.
 
         The carrier sense property is set (True/False) depending on the type of event received (CARRIER or NOCARRIER).
         '''
@@ -513,21 +538,24 @@ class Modem:
 
 
 def get_alsa_device(device_desc, device_mode=RX):
-    '''Get ALSA 'card,device' string based on device description
+    '''Get ALSA 'card,device' device string based on device description text.
 
     The purpose of this function is to ensure the correct card and device are identified in case the connected audo devices change. The output of 'arecord -l' or 'aplay -l' (depending on specified device mode) is used to get device descriptions. Try running the applicable command (arecord or aplay) to find the device description.
 
-    :param device_desc: str, unique string to search for in device descriptions (ex. 'USB PnP')
-    :param device_mode: str, search for input or output audio devices (optional, default: minimodem.RX, see module constants)
+    Args:
+        device_desc (str): Snique string to search for in device descriptions (ex. 'USB PnP' or 'QDX')
+        device_mode (str): Search for input or output audio devices (optional, default: fskmodem.RX, see module constants)
 
-    :return: str | None, card and device (ex. '2,0') or None if no matching device was found
+    Returns:
+        str: Card and device (ex. '2,0')
+        None: No device was found matching the specified text
     '''
     if device_mode == RX:
         alsa_cmd = ['arecord', '-l']
     elif device_mode == TX:
         alsa_cmd = ['aplay', '-l']
     else:
-        raise Exception('Unknown mode \'' + device_mode + '\'')
+        raise Exception('Unknown mode: {}'.format(device_mode))
         return None
 
     alsa_dev = None
@@ -549,9 +577,6 @@ def get_alsa_device(device_desc, device_mode=RX):
             start_index = line.find(start) + len(start)
             end_index = line.find(end, start_index)
             device = line[start_index:end_index].strip()
-            # build the device string
-            alsa_dev = card + ',' + device
-            break
-
-    return alsa_dev
+            # build and return the device string
+            return '{},{}'.format(card, device)
 
