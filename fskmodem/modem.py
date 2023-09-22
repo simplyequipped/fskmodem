@@ -150,7 +150,7 @@ class FSKReceive(FSKBase):
             fskmodem.FSKRecieve: FSKReceive instance object
         '''
         self.mode = 'RX'
-        super().__init__(self, self.mode, **kwargs)
+        super().__init__(self.mode, **kwargs)
 
     def receive(self, size=1):
         '''Receive data from minimodem subprocess.
@@ -196,7 +196,7 @@ class FSKTransmit(FSKBase):
             fskmodem.FSKTransmit: FSKTransmit instance object
         '''
         self.mode = 'TX'
-        super().__init__(self, self.mode, **kwargs)
+        super().__init__(self.mode, **kwargs)
 
     def send(self, data):
         '''Send data to the minimodem subprocess.
