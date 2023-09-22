@@ -272,8 +272,8 @@ class Modem:
 
     def start(self):
         '''Start modem monitoring loops and subprocesses.'''
-        self._rx = FSKReceive(self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
-        self._tx = FSKTransmit(self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
+        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
+        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
