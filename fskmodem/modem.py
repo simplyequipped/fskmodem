@@ -71,7 +71,7 @@ class FSKBase:
         
         Args:
             mode (str): Operating mode of the minimodem application ('rx', 'receive', 'read', 'tx', 'transmit', or 'write')
-            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev (str): ALSA audio device formated as 'card,device' (ex. '2,0'), defaults to None
             baudrate (int): Baudrate of the modem, defaults to 300 baud
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
@@ -246,8 +246,8 @@ class Modem:
     '''Create and manage an AFSK soft modem.
 
     Attributes:
-        alsa_dev_in (str): Input ALSA device formated as 'card,device' (ex. '2,0')
-        alsa_dev_out (str): Output ALSA device formated as 'card,device' (ex. '2,0')
+        alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0')
+        alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0')
         baudrate (int): Baudrate of the modem, defaults to 300 baud
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
@@ -256,16 +256,66 @@ class Modem:
         carrier_sense (bool): True if incoming carrier detected, False otherwise
     '''
 
-    def __init__(self, alsa_dev=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
+    @staticmethod
+    def get_alsa_device(device_desc, device_type='input'):
+        '''Get ALSA device string based on device description text.
+    
+        The purpose of this function is to ensure the correct card and device are identified in case the connected audo devices change. Device descriptions are sourced from 'arecord -l' (input) or 'aplay -l' (output) bash commands.
+    
+        Args:
+            device_desc (str): Text to search for in device descriptions (ex. 'QDX')
+            device_type (str): 'input' to match audio input devices or 'output' to match audio output devices, defaults to 'input'
+    
+        Returns:
+            str: Card and device (ex. '2,0')
+            None: No device matching the specified text
+        '''
+        device_type = device_type.lower()
+        
+        if device_type == 'input':
+            alsa_cmd = ['arecord', '-l']
+        elif device_type == 'output':
+            alsa_cmd = ['aplay', '-l']
+        else:
+            raise Exception('Unknown device type: {}'.format(device_type))
+    
+        alsa_dev = None
+        # get audio device descriptions
+        alsa_devs = subprocess.check_output(alsa_cmd).decode('utf-8').split('\n')
+    
+        for line in alsa_devs:
+            if device_desc in line:
+                # capture the card number
+                start = 'card'
+                end = ':'
+                start_index = line.find(start) + len(start)
+                end_index = line.find(end, start_index)
+                card = line[start_index:end_index].strip()
+                
+                # capture the device number
+                start = 'device'
+                end = ':'
+                start_index = line.find(start) + len(start)
+                end_index = line.find(end, start_index)
+                device = line[start_index:end_index].strip()
+                
+                return '{},{}'.format(card, device)
+
+    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
         '''Initialize Modem class instance.
 
-        If the input and output ALSA devices are the same device, use *alsa_dev*. Otherwise, use *alsa_dev_in* and *alsa_dev_out* to specifiy different devices for input and output.
+        Use *search_alsa_dev_in* and *search_alsa_dev_out* to search for an ALSA audio device containing the specified text. If *search_alsa_dev_out* is *None*, *search_alsa_dev_in* is used for both input and output audio devices.
 
+        Use *alsa_dev_in* and *alsa_dev_out* to specify an audio device by ALSA card/device (ex. '2,0'). If *alsa_dev_out* is *None*, *alsa_dev_in* is used for both input and output audio devices.
+        
+        If no audio device arguments are set, the ALSA default system device will be used.
+        
         Args:
-            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
-            alsa_dev_in (str): Input ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
-            alsa_dev_out (str): Output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
-            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            search_alsa_dev_in (str): ALSA audio input device search text (ex. 'QDX'), defaults to None
+            search_alsa_dev_out (str): ALSA audio output device search text (ex. 'QDX'), defaults to None
+            alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0'), defaults to None
+            baudrate (int): Baudrate of the modem, defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
             mark (int): Mark frequency in Hz, defaults to None
@@ -275,13 +325,22 @@ class Modem:
         Returns:
             fskmodem.Modem: Modem instance object
         '''
-        if alsa_dev is None:
-            self.alsa_dev_in = alsa_dev_in
-            self.alsa_dev_out = alsa_dev_out
-        else:
-            self.alsa_dev_in = alsa_dev
-            self.alsa_dev_out = alsa_dev
+        if search_alsa_dev_in is not None:
+            # get first alsa card/device containing specified text
+            alsa_dev_in = Modem.get_alsa_device(search_alsa_dev_in, 'input')
+            if alsa_dev_in is None:
+                raise OSError('No ALSA audio input device found containing: {}'.format(search_alsa_dev_in))
+
+        if search_alsa_dev_out is not None:
+            alsa_dev_out = Modem.get_alsa_device(search_alsa_dev_out, 'output')
+            if alsa_dev_out is None:
+                raise OSError('No ALSA audio output device found containing: {}'.format(search_alsa_dev_out))
+
+        if alsa_dev_in is not None and alsa_dev_out is None:
+            alsa_dev_out = alsa_dev_in
         
+        self.alsa_dev_in = alsa_dev_in
+        self.alsa_dev_out = alsa_dev_out
         self.baudrate = baudrate
         self.sync_byte = sync_byte
         self.confidence = confidence
@@ -291,6 +350,7 @@ class Modem:
         self.online = False
         self.carrier_sense = False
         self._rx_callback = None
+        self._rx_callback_bytes = None
         self._toggle_ptt_callback = None
         self._rx_confidence = 0
         self._rx_confidence_timestamp = 0
@@ -301,7 +361,6 @@ class Modem:
         # configure exit handler
         atexit.register(self.stop)
 
-        # start the modem if specified
         if start:
             self.start()
 
@@ -345,12 +404,23 @@ class Modem:
         '''Set incoming packet callback function.
             
         Callback function signature:
-        function(data, confidence) where *data* is type *bytes* and *confidence* is type *float*
+            function(data, confidence) where *data* is type *str* and *confidence* is type *float*
 
         Args:
             callback (function): Function to call when a packet is received
         '''
         self._rx_callback = callback
+
+    def set_rx_callback_bytes(self, callback):
+        '''Set incoming packet bytes callback function.
+            
+        Callback function signature:
+            function(data, confidence) where *data* is type *bytes* and *confidence* is type *float*
+
+        Args:
+            callback (function): Function to call when a packet is received
+        '''
+        self._rx_callback_bytes = callback
 
     def set_ptt_callback(self, callback):
         '''Set PTT toggle callback function.
@@ -398,43 +468,48 @@ class Modem:
         '''Toggle radio PTT via callback function.'''
         if self._toggle_ptt_callback is not None:
             self._toggle_ptt_callback()
+    
+    def _receive_next(self):
+        '''Get next byte from receive minimodem instance.
 
-    def _tx_loop(self):
-        '''Process data in the transmit buffer.'''
-        while self.online:
-            time.sleep(0.01) # 10 ms
+        Always call this function from a thread since the underlying subprocess pipe read will not return until data is available.
+        Validation of the received byte is performed by attempting to decode the byte and catching any UnicodeDecodeError exceptions.
+
+        Returns:
+            bytes: Received byte string (may be  b'' if a decode error occured)
+        '''
+        data = self._rx.receive()
+
+        # capture characters that cannot be decoded (receiver noise)
+        try:
+            data.decode('utf-8')
+        except UnicodeDecodeError:
+            return b''
+        
+        return data
+
+    def _process_rx_callback(self, data, confidence):
+        '''Call rx callback functions via thread.
+
+        If *str* and *bytes* callbacks are set, both callbacks will be called.
+
+        Args:
+            data (bytes): received data
+            confidence (float): receiver confidence near the time the data was received
+        '''
+        if self._rx_callback_bytes is not None:
+            # use bytes callback function
+            rx_bytes_thread = threading.Thread(target=self._rx_callback_bytes, args=(data, confidence))
+            rx_bytes_thread.daemon = True
+            rx_bytes_thread.start()
             
-            if self.carrier_sense:
-                continue
-
-            # process transmit buffer
-            if len(self._tx_buffer) > 0:
-                # random delay (100 - 250 ms) before transmitting to avoid collisions
-                time.sleep(random.uniform(0.10, 0.25))
-                
-                if self.carrier_sense:
-                    continue
-
-                # track bytes sent and start time
-                tx_byte_count = 0
-                tx_start_timestamp = time.time()
-                self._toggle_ptt()
-                
-                while len(self._tx_buffer) > 0:
-                    data = self._tx_buffer.pop(0)
-                    tx_byte_count += len(data)
-                    self._tx.send(data)
-
-                # calculate duration of transmssion based on number of bytes sent
-                # bytes sent / baudrate = transmit time in seconds, assumes 8-bit encoding
-                tx_end_timestamp = tx_start_timestamp + (tx_byte_count / self.baudrate)
-                # hold ptt briefly after calculated end of tx
-                tx_end_timestamp += 0.5 # seconds
-                
-                while time.time() < tx_end_timestamp:
-                    time.sleep(0.1) # 100 ms
-                    
-                self._toggle_ptt()
+        if self._rx_callback is not None:
+            # decode data before callback
+            data = data.decode('utf-8')
+            # use str callback function
+            rx_thread = threading.Thread(target=self._rx_callback, args=(data, confidence))
+            rx_thread.daemon = True
+            rx_thread.start()
         
     def _rx_loop(self):
         '''Receive incoming bytes into a buffer and find data packets.
@@ -495,34 +570,43 @@ class Modem:
 
             # simmer down
             time.sleep(0.001)
-    
-    def _receive_next(self):
-        '''Get next byte from receive minimodem instance.
 
-        Always call this function from a thread since the underlying subprocess pipe read will not return until data is available.
-        Validation of the received byte is performed by attempting to decode the byte and catching any UnicodeDecodeError exceptions.
-
-        Returns:
-            bytes: Received byte string (may be  b'' if a decode error occured)
-        '''
-        data = self._rx.receive()
-
-        # capture characters that cannot be decoded (receiver noise)
-        try:
-            data.decode('utf-8')
-        except UnicodeDecodeError:
-            return b''
-        
-        return data
-
-    def _process_rx_callback(self, data, confidence):
-        '''Call recieve callback via thread.'''
-        if self._rx_callback is None:
-            return
+    def _tx_loop(self):
+        '''Process data in the transmit buffer.'''
+        while self.online:
+            time.sleep(0.01) # 10 ms
             
-        thread = threading.Thread(target=self._rx_callback, args=(data, confidence))
-        thread.daemon = True
-        thread.start()
+            if self.carrier_sense:
+                continue
+
+            # process transmit buffer
+            if len(self._tx_buffer) > 0:
+                # random delay (100 - 250 ms) before transmitting to avoid collisions
+                time.sleep(random.uniform(0.10, 0.25))
+                
+                if self.carrier_sense:
+                    continue
+
+                # track bytes sent and start time
+                tx_byte_count = 0
+                tx_start_timestamp = time.time()
+                self._toggle_ptt()
+                
+                while len(self._tx_buffer) > 0:
+                    data = self._tx_buffer.pop(0)
+                    tx_byte_count += len(data)
+                    self._tx.send(data)
+
+                # calculate duration of transmssion based on number of bytes sent
+                # bytes sent / baudrate = transmit time in seconds, assumes 8-bit encoding
+                tx_end_timestamp = tx_start_timestamp + (tx_byte_count / self.baudrate)
+                # hold ptt briefly after calculated end of tx
+                tx_end_timestamp += 0.5 # seconds
+                
+                while time.time() < tx_end_timestamp:
+                    time.sleep(0.1) # 100 ms
+                    
+                self._toggle_ptt()
 
     def _stderr_loop(self):
         '''Receive stderr data from the MiniModem process into a buffer and identify carrier events.
@@ -565,8 +649,8 @@ class Modem:
                         # try to decode and record confidence data
                         try:
                             carrier_confidence = float(carrier_confidence.decode('utf-8'))
-                            self._rx_confidence['confidence'] = carrier_confidence
-                            self._rx_confidence['timestamp'] = time.time()
+                            self._rx_confidence = carrier_confidence
+                            self._rx_confidence_timestamp = time.time()
                         except:
                             # discard on failure to decode or cast to float
                             pass
@@ -578,48 +662,4 @@ class Modem:
 
             # simmer down
             time.sleep(0.001)
-
-
-def get_alsa_device(device_desc, device_type='in'):
-    '''Get ALSA device string based on device description text.
-
-    The purpose of this function is to ensure the correct card and device are identified in case the connected audo devices change. Device descriptions are sourced from 'arecord -l' (input type) or 'aplay -l' (output type) bash commands.
-
-    Args:
-        device_desc (str): Text to search for in device descriptions (ex. 'QDX')
-        device_type (str): Whether to match input or output audio devices, defaults to 'in' ('in' = input, 'out' = output)
-
-    Returns:
-        str: Card and device (ex. '2,0')
-        None: No device matching the specified text
-    '''
-    device_type = device_type.lower()
-    
-    if device_type == 'in':
-        alsa_cmd = ['arecord', '-l']
-    elif device_type == 'out':
-        alsa_cmd = ['aplay', '-l']
-    else:
-        raise Exception('Unknown device type: {}'.format(device_type))
-
-    alsa_dev = None
-    # get audio device descriptions
-    alsa_devs = subprocess.check_output(alsa_cmd).decode('utf-8').split('\n')
-
-    for line in alsa_devs:
-        if device_desc in line:
-            # capture the card number
-            start = 'card'
-            end = ':'
-            start_index = line.find(start) + len(start)
-            end_index = line.find(end, start_index)
-            card = line[start_index:end_index].strip()
             
-            # capture the device number
-            start = 'device'
-            end = ':'
-            start_index = line.find(start) + len(start)
-            end_index = line.find(end, start_index)
-            device = line[start_index:end_index].strip()
-            
-            return '{},{}'.format(card, device)
