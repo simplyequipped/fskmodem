@@ -14,7 +14,7 @@ See the [minimodem manpage](http://www.whence.com/minimodem/minimodem.1.html) fo
 
 *minimodem* Protocol Defaults:
 
-|*baudmode* | Baudrate | Mode | Mark | Space | Notes |
+| Baudmode | Baudrate | Mode | Mark | Space | Notes |
 | -------- | -------- | -------- | -------- | -------- | -------- |
 | N | N bps | Bell 202-style | 1200 Hz | 2200 Hz | sets `--ascii` |
 | 1200 | 1200 bps | Bell 202 | 1200 Hz | 2200 Hz | sets `--ascii` |
@@ -57,22 +57,22 @@ class FSKBase:
 
     Attributes:
         mode (str): Operating mode of the minimodem application ('rx', 'receive', 'read', 'tx', 'transmit', or 'write')
-        alsa_dev (str or None): ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
-        baudrate (int): Baudrate of the modem, defaults to 300 baud
+        alsa_dev (str or None): ALSA audio device formated as 'card,device' (ex. '2,0'), or None if using system default audio device
+        baudmode (int): Baudmode of the modem (see package docs or *minimodem* docs for more details)
+        baud (int): Baud rate of the modem, based on *baudmode*
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
         mark (int): Mark frequency in Hz, defaults to None
         space (int): Space frequency in Hz, defaults to None
         online (bool): True if subprocess is running, False otherwise
     '''
-
-    def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, mark=None, space=None, start=True):
+    def __init__(self, mode, alsa_dev=None, baudmode=300, sync_byte=None, confidence=None, mark=None, space=None, start=True):
         '''Initialize FSKBase class instance.
         
         Args:
             mode (str): Operating mode of the minimodem application ('rx', 'receive', 'read', 'tx', 'transmit', or 'write')
             alsa_dev (str): ALSA audio device formated as 'card,device' (ex. '2,0'), defaults to None
-            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            baudmode (int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
             mark (int): Mark frequency in Hz, defaults to None
@@ -81,10 +81,13 @@ class FSKBase:
 
         Returns:
             fskmodem.FSKBase: FSKBase instance object
+
+        Raises:
+            ProcessLookupError: minimodem application not installed
         '''
         self.mode = lower(mode)
         self.alsa_dev = alsa_dev
-        self.baudrate = baudrate
+        self.baudmode = str(baudmode)
         self.sync_byte = sync_byte
         self.confidence = confidence
         self.mark = mark
@@ -121,7 +124,7 @@ class FSKBase:
         switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_filter, switch_mark, switch_space]
         switches = [switch for switch in switches if switch is not None]
         # note from minimodem docs: confidence, sync byte, quiet, and print filter are ignored in tx mode
-        self._shell_cmd = '{} {} {}'.format(exec_path, ' '.join(switches), self.baudrate)
+        self._shell_cmd = '{} {} {}'.format(exec_path, ' '.join(switches), self.baudmode)
 
         if start:
             self.start()
@@ -168,7 +171,7 @@ class FSKReceive(FSKBase):
 
         Args:
             alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
-            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            baudmode (int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
             mark (int): Mark frequency in Hz, defaults to None
@@ -216,7 +219,7 @@ class FSKTransmit(FSKBase):
 
         Args:
             alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
-            baudrate (int): Baudrate of the modem, defaults to 300 baud
+            baudmode (int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
             mark (int): Mark frequency in Hz, defaults to None
@@ -248,13 +251,25 @@ class Modem:
     Attributes:
         alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0')
         alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0')
-        baudrate (int): Baudrate of the modem, defaults to 300 baud
+        baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
+        baudrate (int): Baudrate of the modem, determined by *baudmode*
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
         MTU (int): Maximum size of packet to be transmitted or received (default: 500, see Reticulum Network Stack)
         online (bool): True if modem subprocesses are running, False otherwise
         carrier_sense (bool): True if incoming carrier detected, False otherwise
+        BAUDMODES (dict): Map of *minimodem* baudmodes to baudrates
     '''
+
+    # minimodem baudmodes and assocaited baudrates
+    BAUDMODES = {
+        'rtty': 45.45,
+        'tdd': 45.45,
+        'same': 520.83,
+        'callerid': 1200,
+        'uic-train': 600,
+        'uic-ground': 600
+    }
 
     @staticmethod
     def get_alsa_device(device_desc, device_type='input'):
@@ -301,7 +316,7 @@ class Modem:
                 
                 return '{},{}'.format(card, device)
 
-    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
+    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudmode=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
         '''Initialize Modem class instance.
 
         Use *search_alsa_dev_in* and *search_alsa_dev_out* to search for an ALSA audio device containing the specified text. If *search_alsa_dev_out* is *None*, *search_alsa_dev_in* is used for both input and output audio devices.
@@ -315,7 +330,7 @@ class Modem:
             search_alsa_dev_out (str): ALSA audio output device search text (ex. 'QDX'), defaults to None
             alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0'), defaults to None
             alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0'), defaults to None
-            baudrate (int): Baudrate of the modem, defaults to 300
+            baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
             mark (int): Mark frequency in Hz, defaults to None
@@ -324,6 +339,10 @@ class Modem:
 
         Returns:
             fskmodem.Modem: Modem instance object
+
+        Raises:
+            OSError: No ALSA audio device found containing specified search text
+            ValueError: Unable to determine baudrate from specified baudmode
         '''
         if search_alsa_dev_in is not None:
             # get first alsa card/device containing specified text
@@ -338,10 +357,10 @@ class Modem:
 
         if alsa_dev_in is not None and alsa_dev_out is None:
             alsa_dev_out = alsa_dev_in
-        
+            
         self.alsa_dev_in = alsa_dev_in
         self.alsa_dev_out = alsa_dev_out
-        self.baudrate = baudrate
+        self.baudmode = baudmode
         self.sync_byte = sync_byte
         self.confidence = confidence
         self.mark = mark
@@ -358,6 +377,15 @@ class Modem:
         self._rx = None
         self._tx = None
 
+        # determine baudrate based on specified baudmode
+        #TODO does not support float baudrates
+        if self.baudmode.isnumeric():
+            self.baudrate = int(self.baudmode)
+        elif self.baudmode in Modem.BAUDMODES:
+            self.baudrate = Modem.BAUDMODES[self.baudmode]
+        else:
+            raise ValueError('Unable to determine baudrate from baudmode: {}'.format(self.baudmode))
+
         # configure exit handler
         atexit.register(self.stop)
 
@@ -366,8 +394,8 @@ class Modem:
 
     def start(self):
         '''Start modem monitoring loops and subprocesses.'''
-        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
-        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
+        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
+        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
@@ -408,8 +436,14 @@ class Modem:
 
         Args:
             callback (function): Function to call when a packet is received
+
+        Raises:
+            TypeError: Specified callback object is not callable
         '''
-        self._rx_callback = callback
+        if callable(callback):
+            self._rx_callback = callback
+        else:
+            raise TypeError('Specified callback object is not callable')
 
     def set_rx_callback_bytes(self, callback):
         '''Set incoming packet bytes callback function.
@@ -419,8 +453,14 @@ class Modem:
 
         Args:
             callback (function): Function to call when a packet is received
+
+        Raises:
+            TypeError: Specified callback object is not callable
         '''
-        self._rx_callback_bytes = callback
+        if callable(callback):
+            self._rx_callback_bytes = callback
+        else:
+            raise TypeError('Specified callback object is not callable')
 
     def set_ptt_callback(self, callback):
         '''Set PTT toggle callback function.
@@ -458,8 +498,8 @@ class Modem:
         Raises:
             TypeError: specified data is not type bytes
         '''
-        if type(data) != bytes:
-            raise TypeError('Raw data must be of type bytes, not: {}'.format(type(data)))
+        if not isinstance(data, bytes):
+            raise TypeError( 'Data must be of type bytes, {} given'.format( type(data) ) )
 
         data = HDLC.START + data + HDLC.STOP
         self._tx_buffer.append(data)
@@ -591,6 +631,8 @@ class Modem:
                 tx_byte_count = 0
                 tx_start_timestamp = time.time()
                 self._toggle_ptt()
+                #TODO test delay duration
+                time.sleep(0.1) # 100 ms
                 
                 while len(self._tx_buffer) > 0:
                     data = self._tx_buffer.pop(0)
@@ -601,6 +643,7 @@ class Modem:
                 # bytes sent / baudrate = transmit time in seconds, assumes 8-bit encoding
                 tx_end_timestamp = tx_start_timestamp + (tx_byte_count / self.baudrate)
                 # hold ptt briefly after calculated end of tx
+                #TODO test delay duration
                 tx_end_timestamp += 0.5 # seconds
                 
                 while time.time() < tx_end_timestamp:
