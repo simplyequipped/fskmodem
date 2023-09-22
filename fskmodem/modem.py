@@ -55,16 +55,14 @@ class HDLC:
 class FSKBase:
     '''Create and interact with a minimodem subprocess.
 
-    The Bell 103 protocol is used when *baudrate* is set to 300, which results in a mark frequency of 1270 Hz and a space frequency of 1070 Hz (200 Hz shift). Mark and space frequencies can be changed using *mark* and *space* arguements.
-
-    See the minimodem manpage for more information about the application.
-
     Attributes:
-        mode (str): Operating mode of the minimodem application, must be 'RX' or 'TX'
+        mode (str): Operating mode of the minimodem application ('rx', 'receive', 'read', 'tx', 'transmit', or 'write')
         alsa_dev (str or None): ALSA device formated as 'card,device' (ex. '2,0'), or None to use system default
         baudrate (int): Baudrate of the modem, defaults to 300 baud
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
         confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
+        mark (int): Mark frequency in Hz, defaults to None
+        space (int): Space frequency in Hz, defaults to None
         online (bool): True if subprocess is running, False otherwise
     '''
 
@@ -169,10 +167,12 @@ class FSKReceive(FSKBase):
         '''Initialize FSKRecieve class instance.
 
         Args:
-            alsa_dev (str): Input ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
             baudrate (int): Baudrate of the modem, defaults to 300 baud
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
+            mark (int): Mark frequency in Hz, defaults to None
+            space (int): Space frequency in Hz, defaults to None
             start (bool): Start minimodem subprocess on object instantiation, defaults to True
 
         Returns:
@@ -215,10 +215,12 @@ class FSKTransmit(FSKBase):
         '''Initialize FSKTransmit class instance.
 
         Args:
-            alsa_dev (str): Input ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
             baudrate (int): Baudrate of the modem, defaults to 300 baud
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
+            mark (int): Mark frequency in Hz, defaults to None
+            space (int): Space frequency in Hz, defaults to None
             start (bool): Start minimodem subprocess on object instantiation, defaults to True
 
         Returns:
@@ -325,7 +327,7 @@ class Modem:
         job_thread.start()
 
     def stop(self):
-        '''Stop modem and underlying processes.'''
+        '''Stop modem and subprocesses.'''
         self.online = False
 
         # use a thread to stop the child process non-blocking-ly
