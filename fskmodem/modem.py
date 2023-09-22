@@ -1,22 +1,40 @@
 #TODO
 # - add license
-# - test ptt toggle delay with minimodem, various baudrates
+# - test ptt toggle delay with minimodem, various baud rates
 
 
-'''A full duplex FSK soft modem utilizing the Unix application minimodem.
+'''A full duplex AFSK soft modem.
 
-The minimodem application can be installed on Debian systems with the following command:
+[minimodem](http://www.whence.com/minimodem/) application copyright by Kamal Mostafa.
+
+The *minimodem* application can be installed on Debian systems with the following command:
 `sudo apt install minimodem`
+
+See the [minimodem manpage](http://www.whence.com/minimodem/minimodem.1.html) for more information about configuration options and supported protocols.
+
+*minimodem* Protocol Defaults:
+
+|*baudmode* | Baudrate | Mode | Mark | Space | Notes |
+| -------- | -------- | -------- | -------- | -------- | -------- |
+| N | N bps | Bell 202-style | 1200 Hz | 2200 Hz | sets `--ascii` |
+| 1200 | 1200 bps | Bell 202 | 1200 Hz | 2200 Hz | sets `--ascii` |
+| 300 | 300 bps | Bell 103 | 1270 Hz | 1070 Hz | sets `--ascii` |
+| rtty | 45.45 bps | Bell 103 | variable | -170 Hz | sets `--baudot --stopbits 1.5` |
+| tdd | 45.45 bps | TTY/TDD | 1400 Hz | 1800 Hz | sets `--baudot --stopbits 2` |
+| same | 520.83 bps | NOAA S.A.M.E. | 2083 1/3 Hz | 1562.5 Hz | sets `−−startbits 0 −−stopbits 0 −−sync-byte 0xAB` |
+| callerid | 1200 bps | Bell 202 Caller-ID (MDMF or SDMF) | 1200 Hz | 2200 Hz | receive only |
+| uic-train | 600 bps | UIC-751-3 train-to-ground | 1300 Hz | 1700 Hz | receive only, `−−startbits 8 −−stopbits 0` |
+| uic-ground | 600 bps | UIC-751-3 ground-to-train | 1300 Hz | 1700 Hz | receive only, `−−startbits 8 −−stopbits 0` |
 '''
 
 import os
 import sys
-import subprocess
-import threading
 import time
 import random
 import atexit
 import shutil
+import threading
+import subprocess
 from subprocess import PIPE, CalledProcessError
 
 
@@ -37,6 +55,8 @@ class HDLC:
 class FSKBase:
     '''Create and interact with a minimodem subprocess.
 
+    The Bell 103 protocol is used when *baudrate* is set to 300, which results in a mark frequency of 1270 Hz and a space frequency of 1070 Hz (200 Hz shift). Mark and space frequencies can be changed using *mark* and *space* arguements.
+
     See the minimodem manpage for more information about the application.
 
     Attributes:
@@ -48,25 +68,29 @@ class FSKBase:
         online (bool): True if subprocess is running, False otherwise
     '''
 
-    def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, start=True):
+    def __init__(self, mode, alsa_dev=None, baudrate=300, sync_byte=None, confidence=None, mark=None, space=None, start=True):
         '''Initialize FSKBase class instance.
-
+        
         Args:
-            mode (str): Operating mode of the minimodem application, must be 'RX' or 'TX'
+            mode (str): Operating mode of the minimodem application ('rx', 'receive', 'read', 'tx', 'transmit', or 'write')
             alsa_dev (str): Input/output ALSA device formated as 'card,device' (ex. '2,0'), defaults to None
             baudrate (int): Baudrate of the modem, defaults to 300 baud
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to None
+            mark (int): Mark frequency in Hz, defaults to None
+            space (int): Space frequency in Hz, defaults to None
             start (bool): Start minimodem subprocess on object instantiation, defaults to True
 
         Returns:
             fskmodem.FSKBase: FSKBase instance object
         '''
-        self.mode = mode
+        self.mode = lower(mode)
         self.alsa_dev = alsa_dev
         self.baudrate = baudrate
         self.sync_byte = sync_byte
         self.confidence = confidence
+        self.mark = mark
+        self.space = space
         self.online = False
         self._process = None
         self._shell_cmd = None
@@ -87,12 +111,16 @@ class FSKBase:
 
         if self.alsa_dev is not None:
             switch_alsa_dev = '--alsa={}'.format(self.alsa_dev)
-        if self.confidence is not None:
-            switch_confidence = '--confidence {}'.format(self.confidence)
         if self.sync_byte is not None:
             switch_sync_byte = '--sync-byte {}'.format(self.sync_byte)
+        if self.confidence is not None:
+            switch_confidence = '--confidence {}'.format(self.confidence)
+        if self.mark is not None:
+            switch_mark = '--mark {}'.format(self.mark)
+        if self.space is not None:
+            switch_space = '--space {}'.format(self.space)
 
-        switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_filter]
+        switches = [switch_mode, switch_alsa_dev, switch_confidence, switch_sync_byte, switch_filter, switch_mark, switch_space]
         switches = [switch for switch in switches if switch is not None]
         # note from minimodem docs: confidence, sync byte, quiet, and print filter are ignored in tx mode
         self._shell_cmd = '{} {} {}'.format(exec_path, ' '.join(switches), self.baudrate)
@@ -150,7 +178,7 @@ class FSKReceive(FSKBase):
         Returns:
             fskmodem.FSKRecieve: FSKReceive instance object
         '''
-        self.mode = 'RX'
+        self.mode = 'rx'
         super().__init__(self.mode, **kwargs)
 
     def receive(self, size=1):
@@ -196,7 +224,7 @@ class FSKTransmit(FSKBase):
         Returns:
             fskmodem.FSKTransmit: FSKTransmit instance object
         '''
-        self.mode = 'TX'
+        self.mode = 'tx'
         super().__init__(self.mode, **kwargs)
 
     def send(self, data):
@@ -213,7 +241,7 @@ class FSKTransmit(FSKBase):
 
 
 class Modem:
-    '''Create and manage a FSK soft modem.
+    '''Create and manage an AFSK soft modem.
 
     Attributes:
         alsa_dev_in (str): Input ALSA device formated as 'card,device' (ex. '2,0')
@@ -226,7 +254,7 @@ class Modem:
         carrier_sense (bool): True if incoming carrier detected, False otherwise
     '''
 
-    def __init__(self, alsa_dev=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, start=True):
+    def __init__(self, alsa_dev=None, alsa_dev_in=None, alsa_dev_out=None, baudrate=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
         '''Initialize Modem class instance.
 
         If the input and output ALSA devices are the same device, use *alsa_dev*. Otherwise, use *alsa_dev_in* and *alsa_dev_out* to specifiy different devices for input and output.
@@ -238,6 +266,8 @@ class Modem:
             baudrate (int): Baudrate of the modem, defaults to 300 baud
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
+            mark (int): Mark frequency in Hz, defaults to None
+            space (int): Space frequency in Hz, defaults to None
             start (bool): Start modem subprocesses on object instantiation, defaults to True
 
         Returns:
@@ -253,6 +283,8 @@ class Modem:
         self.baudrate = baudrate
         self.sync_byte = sync_byte
         self.confidence = confidence
+        self.mark = mark
+        self.space = space
         self.MTU = 500
         self.online = False
         self.carrier_sense = False
@@ -273,8 +305,8 @@ class Modem:
 
     def start(self):
         '''Start modem monitoring loops and subprocesses.'''
-        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
-        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
+        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
+        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
