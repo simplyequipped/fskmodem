@@ -73,8 +73,9 @@ class FSKBase:
 
         # get full file path for minimodem executable
         exec_path = shutil.which('minimodem')
-        # handle minimodem not installed
+        
         if exec_path is None:
+            # minimodem not installed
             raise ProcessLookupError('minimodem application not installed, try: sudo apt install minimodem')
 
         # configure minimodem comand line switches
