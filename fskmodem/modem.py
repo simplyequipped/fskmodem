@@ -272,7 +272,7 @@ class Modem:
 
     def start(self):
         '''Start modem monitoring loops and subprocesses.'''
-        self._rx = FSKRecieve(self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
+        self._rx = FSKReceive(self.alsa_dev_in, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
         self._tx = FSKTransmit(self.alsa_dev_out, baudrate=self.baudrate, sync_byte=self.sync_byte, confidence=self.confidence)
         self.online = True
 
