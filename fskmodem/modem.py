@@ -354,7 +354,7 @@ class Modem:
             TypeError: specified data is not type bytes
         '''
         if type(data) != bytes:
-            raise TypeError('Raw data must be of type bytes, not: {}'.format(str(type(data)))
+            raise TypeError('Raw data must be of type bytes, not: {}'.format(type(data)))
 
         data = HDLC.START + data + HDLC.STOP
         self._tx_buffer.append(data)
