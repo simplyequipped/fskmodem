@@ -85,7 +85,7 @@ class FSKBase:
         Raises:
             ProcessLookupError: minimodem application not installed
         '''
-        self.mode = lower(mode)
+        self.mode = mode.lower()
         self.alsa_dev = alsa_dev
         self.baudmode = str(baudmode)
         self.sync_byte = sync_byte
@@ -104,11 +104,13 @@ class FSKBase:
             raise ProcessLookupError('minimodem application not installed, try: sudo apt install minimodem')
 
         # configure minimodem comand line switches
+        switch_alsa_dev = None
+        switch_sync_byte = None
+        switch_confidence = None
+        switch_mark = None
+        switch_space = None
         switch_mode = '--{}'.format(self.mode)
         switch_filter = '--print-filter'
-        switch_alsa_dev = None
-        switch_confidence = None
-        switch_sync_byte = None
 
         if self.alsa_dev is not None:
             switch_alsa_dev = '--alsa={}'.format(self.alsa_dev)
@@ -360,7 +362,7 @@ class Modem:
             
         self.alsa_dev_in = alsa_dev_in
         self.alsa_dev_out = alsa_dev_out
-        self.baudmode = baudmode
+        self.baudmode = str(baudmode)
         self.sync_byte = sync_byte
         self.confidence = confidence
         self.mark = mark
@@ -368,6 +370,7 @@ class Modem:
         self.MTU = 500
         self.online = False
         self.carrier_sense = False
+        self._debug = False
         self._rx_callback = None
         self._rx_callback_bytes = None
         self._toggle_ptt_callback = None
@@ -485,7 +488,7 @@ class Modem:
             data (str): data to send
         '''
         data = data.encode('utf-8')
-        self.send_raw(data)
+        self.send_bytes(data)
     
     def send_bytes(self, data):
         '''Send bytes via transmit FSKModem instance.
@@ -507,6 +510,9 @@ class Modem:
     def _toggle_ptt(self):
         '''Toggle radio PTT via callback function.'''
         if self._toggle_ptt_callback is not None:
+            if self._debug:
+                print('PTT')
+
             self._toggle_ptt_callback()
     
     def _receive_next(self):
@@ -526,6 +532,9 @@ class Modem:
         except UnicodeDecodeError:
             return b''
         
+        if self._debug:
+            print(data.decode('utf-8'), sep='', end='', flush=True)
+
         return data
 
     def _process_rx_callback(self, data, confidence):
@@ -537,6 +546,9 @@ class Modem:
             data (bytes): received data
             confidence (float): receiver confidence near the time the data was received
         '''
+        if self._debug:
+            print('\nRX: ' + data.decode('utf-8'))
+        
         if self._rx_callback_bytes is not None:
             # use bytes callback function
             rx_bytes_thread = threading.Thread(target=self._rx_callback_bytes, args=(data, confidence))
@@ -550,7 +562,7 @@ class Modem:
             rx_thread = threading.Thread(target=self._rx_callback, args=(data, confidence))
             rx_thread.daemon = True
             rx_thread.start()
-        
+
     def _rx_loop(self):
         '''Receive incoming bytes into a buffer and find data packets.
 
@@ -636,20 +648,29 @@ class Modem:
                 
                 while len(self._tx_buffer) > 0:
                     data = self._tx_buffer.pop(0)
-                    tx_byte_count += len(data)
+
+                    if self._debug:
+                        print('TX: ' + data.decode('utf-8'))
+
                     self._tx.send(data)
+                    tx_byte_count += len(data)
 
                 # calculate duration of transmssion based on number of bytes sent
-                # bytes sent / baudrate = transmit time in seconds, assumes 8-bit encoding
-                tx_end_timestamp = tx_start_timestamp + (tx_byte_count / self.baudrate)
+                # bits sent / baudrate = transmit time in seconds, assumes 8-bit encoding
+                tx_end_timestamp = tx_start_timestamp + ((tx_byte_count * 8) / self.baudrate)
                 # hold ptt briefly after calculated end of tx
                 #TODO test delay duration
-                tx_end_timestamp += 0.5 # seconds
+                #tx_end_timestamp += 0.5 # seconds
                 
                 while time.time() < tx_end_timestamp:
                     time.sleep(0.1) # 100 ms
                     
                 self._toggle_ptt()
+
+                if self._debug:
+                    duration = tx_end_timestamp - tx_start_timestamp
+                    print('{} bits at {} bps     tx duration: {} s'.format(tx_bit_count, self.baudrate, duration))
+
 
     def _stderr_loop(self):
         '''Receive stderr data from the MiniModem process into a buffer and identify carrier events.
