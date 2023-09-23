@@ -640,10 +640,9 @@ class Modem:
                     continue
 
                 # track bytes sent and start time
-                tx_byte_count = 0
+                tx_bit_count = 0
                 tx_start_timestamp = time.time()
                 self._toggle_ptt()
-                #TODO test delay duration
                 time.sleep(0.1) # 100 ms
                 
                 while len(self._tx_buffer) > 0:
@@ -653,14 +652,21 @@ class Modem:
                         print('TX: ' + data.decode('utf-8'))
 
                     self._tx.send(data)
-                    tx_byte_count += len(data)
+                    tx_bit_count += len(data) * 8
 
-                # calculate duration of transmssion based on number of bytes sent
-                # bits sent / baudrate = transmit time in seconds, assumes 8-bit encoding
-                tx_end_timestamp = tx_start_timestamp + ((tx_byte_count * 8) / self.baudrate)
-                # hold ptt briefly after calculated end of tx
-                #TODO test delay duration
-                #tx_end_timestamp += 0.5 # seconds
+                # calculate duration of transmission based on number of bits sent
+                if self.sync_byte is not None:
+                    # minimodem adds 16 leading sync bytes, plus start and stop bytes for each sync byte
+                    tx_bit_count += 16 * (8 + 2)
+
+                # bits sent / baudrate = transmit time in seconds
+                tx_duration = tx_bit_count / self.baudrate
+                # 1.3x mupltiplier necessary to align with actual transmit duration
+                tx_duration *= 1.3
+                # 0.5 sec ptt tail
+                tx_duration += 0.5
+
+                tx_end_timestamp = tx_start_timestamp + tx_duration
                 
                 while time.time() < tx_end_timestamp:
                     time.sleep(0.1) # 100 ms
@@ -669,7 +675,7 @@ class Modem:
 
                 if self._debug:
                     duration = tx_end_timestamp - tx_start_timestamp
-                    print('{} bits at {} bps     tx duration: {} s'.format(tx_bit_count, self.baudrate, duration))
+                    print('{} bits at {} bps     tx duration: {} s'.format(tx_bit_count, self.baudrate, tx_duration))
 
 
     def _stderr_loop(self):
