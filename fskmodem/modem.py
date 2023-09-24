@@ -452,7 +452,7 @@ class Modem:
         '''Set incoming packet bytes callback function.
             
         Callback function signature:
-            function(data, confidence) where *data* is type *bytes* and *confidence* is type *float*
+            function(data) where *data* is type *bytes*
 
         Args:
             callback (function): Function to call when a packet is received
@@ -551,7 +551,7 @@ class Modem:
         
         if self._rx_callback_bytes is not None:
             # use bytes callback function
-            rx_bytes_thread = threading.Thread(target=self._rx_callback_bytes, args=(data, confidence))
+            rx_bytes_thread = threading.Thread(target=self._rx_callback_bytes, args=data)
             rx_bytes_thread.daemon = True
             rx_bytes_thread.start()
             
