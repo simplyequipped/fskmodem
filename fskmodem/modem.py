@@ -318,7 +318,7 @@ class Modem:
                 
                 return '{},{}'.format(card, device)
 
-    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudmode=300, sync_byte='0x23', confidence=1.5, mark=None, space=None, start=True):
+    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudmode=300, sync_byte=None, confidence=1.5, mark=None, space=None, start=True):
         '''Initialize Modem class instance.
 
         Use *search_alsa_dev_in* and *search_alsa_dev_out* to search for an ALSA audio device containing the specified text. If *search_alsa_dev_out* is *None*, *search_alsa_dev_in* is used for both input and output audio devices.
@@ -333,7 +333,7 @@ class Modem:
             alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0'), defaults to None
             alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0'), defaults to None
             baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
-            sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
+            sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
             mark (int): Mark frequency in Hz, defaults to None
             space (int): Space frequency in Hz, defaults to None
