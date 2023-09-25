@@ -20,6 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+__docformat__ = 'google'
+
+
 '''A full duplex AFSK soft modem.
 
 [minimodem](http://www.whence.com/minimodem/) application copyright by Kamal Mostafa.
