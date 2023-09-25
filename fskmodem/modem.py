@@ -304,8 +304,8 @@ class Modem:
             device_type (str): 'input' to match audio input devices or 'output' to match audio output devices, defaults to 'input'
     
         Returns:
-            str: Card and device (ex. '2,0')
-            None: No device matching the specified text
+            - str: Card and device (ex. '2,0')
+            - None: No device matching the specified text
         '''
         device_type = device_type.lower()
         
