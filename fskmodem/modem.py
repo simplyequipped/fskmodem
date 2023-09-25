@@ -64,12 +64,12 @@ class HDLC:
     Multiple characters per flag makes it less likely that receiver noise will emulate a flag.
     
     Attributes:
-        START (bytes): b'|->'
-        STOP (bytes): b'<-|'
+        START (bytes): b'|>'
+        STOP (bytes): b'<|'
     '''
 
-    START = b'|->'
-    STOP = b'<-|'
+    START = b'|>'
+    STOP = b'<|'
 
 
 class FSKBase:
