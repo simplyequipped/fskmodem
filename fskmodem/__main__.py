@@ -92,7 +92,7 @@ def _read_stdin():
                 data_buffer += bytes([byte])
                 
 if __name__ == '__main__':
-    help_epilog = '\'--search_alsa_dev_in\' is set to \'QDX\' if no audio devices are specifed and --qdxcat is set.\')'
+    help_epilog = '*--search_alsa_dev_in* is set to \'QDX\' if *--qdxcat* is set and no audio devices are specifed. See fskmodem docs for more information on ALSA audio device settings: https://simplyequipped.github.io/fskmodem/fskmodem/modem.html#Modem'
     parser = argparse.ArgumentParser(description='stdin/stdout pipe interface for fskmodem', epilog = help_epilog)
     parser.add_argument('--search_alsa_dev_in', help='ALSA audio input device search text')
     parser.add_argument('--search_alsa_dev_out', help='ALSA audio output device search text')
