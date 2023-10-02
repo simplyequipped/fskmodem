@@ -271,8 +271,8 @@ class Modem:
     '''Create and manage an AFSK soft modem.
 
     Attributes:
-        alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0')
-        alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0')
+        alsa_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0')
+        alsa_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0')
         baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
         baudrate (int): Baudrate of the modem, determined by *baudmode*
         sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to '0x23' (utf-8 '#')
@@ -338,20 +338,20 @@ class Modem:
                 
                 return '{},{}'.format(card, device)
 
-    def __init__(self, search_alsa_dev_in=None, search_alsa_dev_out=None, alsa_dev_in=None, alsa_dev_out=None, baudmode=300, sync_byte=None, confidence=1.5, mark=None, space=None, start=True):
+    def __init__(self, search_alsa_in=None, search_alsa_out=None, alsa_in=None, alsa_out=None, baudmode=300, sync_byte=None, confidence=1.5, mark=None, space=None, start=True):
         '''Initialize Modem class instance.
 
-        Use *search_alsa_dev_in* and *search_alsa_dev_out* to search for an ALSA audio device containing the specified text. If *search_alsa_dev_out* is *None*, *search_alsa_dev_in* is used for both input and output audio devices.
+        Use *search_alsa_in* and *search_alsa_out* to search for an ALSA audio device containing the specified text. If *search_alsa_out* is *None*, *search_alsa_in* is used for both input and output audio devices.
 
-        Use *alsa_dev_in* and *alsa_dev_out* to specify an audio device by ALSA card/device (ex. '2,0'). If *alsa_dev_out* is *None*, *alsa_dev_in* is used for both input and output audio devices.
+        Use *alsa_in* and *alsa_out* to specify an audio device by ALSA card/device (ex. '2,0'). If *alsa_out* is *None*, *alsa_in* is used for both input and output audio devices.
         
         If no audio device arguments are set, the ALSA default system device will be used.
         
         Args:
-            search_alsa_dev_in (str): ALSA audio input device search text (ex. 'QDX'), defaults to None
-            search_alsa_dev_out (str): ALSA audio output device search text (ex. 'QDX'), defaults to None
-            alsa_dev_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0'), defaults to None
-            alsa_dev_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0'), defaults to None
+            search_alsa_in (str): ALSA audio input device search text (ex. 'QDX'), defaults to None
+            search_alsa_out (str): ALSA audio output device search text (ex. 'QDX'), defaults to None
+            alsa_in (str): ALSA audio input device formated as 'card,device' (ex. '2,0'), defaults to None
+            alsa_out (str): ALSA audio output device formated as 'card,device' (ex. '2,0'), defaults to None
             baudmode (str or int): Baudmode of the modem (see package docs or *minimodem* docs for more details), defaults to 300
             sync_byte (str): Suppress rx carrier detection until the specified byte is received, defaults to None
             confidence (float): Minimum confidence threshold based on SNR (i.e. squelch), defaults to 1.5
@@ -366,22 +366,22 @@ class Modem:
             OSError: No ALSA audio device found containing specified search text
             ValueError: Unable to determine baudrate from specified baudmode
         '''
-        if search_alsa_dev_in is not None:
+        if search_alsa_in is not None:
             # get first alsa card/device containing specified text
-            alsa_dev_in = Modem.get_alsa_device(search_alsa_dev_in, 'input')
-            if alsa_dev_in is None:
-                raise OSError('No ALSA audio input device found containing: {}'.format(search_alsa_dev_in))
+            alsa_in = Modem.get_alsa_device(search_alsa_in, 'input')
+            if alsa_in is None:
+                raise OSError('No ALSA audio input device found containing: {}'.format(search_alsa_in))
 
-        if search_alsa_dev_out is not None:
-            alsa_dev_out = Modem.get_alsa_device(search_alsa_dev_out, 'output')
-            if alsa_dev_out is None:
-                raise OSError('No ALSA audio output device found containing: {}'.format(search_alsa_dev_out))
+        if search_alsa_out is not None:
+            alsa_out = Modem.get_alsa_device(search_alsa_out, 'output')
+            if alsa_out is None:
+                raise OSError('No ALSA audio output device found containing: {}'.format(search_alsa_out))
 
-        if alsa_dev_in is not None and alsa_dev_out is None:
-            alsa_dev_out = alsa_dev_in
+        if alsa_in is not None and alsa_out is None:
+            alsa_out = alsa_in
             
-        self.alsa_dev_in = alsa_dev_in
-        self.alsa_dev_out = alsa_dev_out
+        self.alsa_in = alsa_in
+        self.alsa_out = alsa_out
         self.baudmode = str(baudmode)
         self.sync_byte = sync_byte
         self.confidence = confidence
@@ -417,8 +417,8 @@ class Modem:
 
     def start(self):
         '''Start modem monitoring loops and subprocesses.'''
-        self._rx = FSKReceive(alsa_dev=self.alsa_dev_in, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
-        self._tx = FSKTransmit(alsa_dev=self.alsa_dev_out, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
+        self._rx = FSKReceive(alsa_dev=self.alsa_in, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
+        self._tx = FSKTransmit(alsa_dev=self.alsa_out, baudmode=self.baudmode, sync_byte=self.sync_byte, confidence=self.confidence, mark=self.mark, space=self.space)
         self.online = True
 
         # start the receive loop as a thread since reads from the child process are blocking
