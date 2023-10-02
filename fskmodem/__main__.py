@@ -33,6 +33,7 @@ Try `python -m fskmodem --help` for command line switch options.
 # - subprocess call for external ptt on, off, and toggle scripts, script paths supplied via args
 
 import sys
+import time
 import argparse
 import threading
 
