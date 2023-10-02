@@ -59,9 +59,8 @@ def _write_stdout(data):
 
 def _read_stdin():
     global modem
-    in_frame = False
-    escape = False
-    data_buffer = b''
+    global EOM # end of message
+    data_buffer = ''
     
     while modem.online:
         byte = sys.stdin.read(1)
@@ -70,68 +69,107 @@ def _read_stdin():
             # EOL reached, pipe closed
             modem.stop()
             break
+
+        data_buffer += byte
+
+        if len(data_buffer) > modem.MTU:
+            data_buffer = ''
+        elif len(data_buffer) >= 2 and data_buffer[-2:] == EOM:
+            modem.send(data_buffer[:-2])
+            data_buffer = ''
+
+def _rns_write_stdout(data):
+    data = bytes([HDLC.FLAG]) + HDLC.escape(data) + bytes([HDLC.FLAG])
+    sys.stdout.buffer.write(data)
+    sys.stdout.buffer.flush()
+
+def _rns_read_stdin():
+    global modem
+    in_frame = False
+    escape = False
+    data_buffer = b''
+    
+    while modem.online:
+        byte = sys.stdin.buffer.read(1)
+
+        if len(byte) == 0:
+            # EOL reached, pipe closed
+            modem.stop()
+            break
         
         byte = ord(byte)
 
-        if (in_frame and byte == HDLC.FLAG):
+        if in_frame and byte == HDLC.FLAG:
             in_frame = False
             modem.send_bytes(data_buffer)
-        elif (byte == HDLC.FLAG):
+
+        elif byte == HDLC.FLAG:
             in_frame = True
             data_buffer = b''
-        elif (in_frame and len(data_buffer) < modem.MTU):
-            if (byte == HDLC.ESC):
+
+        elif in_frame and len(data_buffer) < modem.MTU:
+            if byte == HDLC.ESC:
                 escape = True
             else:
-                if (escape):
-                    if (byte == HDLC.FLAG ^ HDLC.ESC_MASK):
+                if escape:
+                    if byte == HDLC.FLAG ^ HDLC.ESC_MASK:
                         byte = HDLC.FLAG
-                    if (byte == HDLC.ESC  ^ HDLC.ESC_MASK):
+                    if byte == HDLC.ESC ^ HDLC.ESC_MASK:
                         byte = HDLC.ESC
                     escape = False
                 data_buffer += bytes([byte])
                 
 if __name__ == '__main__':
-    help_epilog = '*--search_alsa_dev_in* is set to \'QDX\' if *--qdxcat* is set and no audio devices are specifed. See fskmodem docs for more information on ALSA audio device settings: https://simplyequipped.github.io/fskmodem/fskmodem/modem.html#Modem'
-    parser = argparse.ArgumentParser(description='stdin/stdout pipe interface for fskmodem', epilog = help_epilog)
-    parser.add_argument('--search_alsa_dev_in', help='ALSA audio input device search text')
-    parser.add_argument('--search_alsa_dev_out', help='ALSA audio output device search text')
-    parser.add_argument('--alsa_dev_in', help='ALSA audio input device formated as \'card,device\'')
-    parser.add_argument('--alsa_dev_out', help='ALSA audio output device formated as \'card,device\'')
+    help_epilog = 'The qdxcat package is required to use *--qdx* options.\n'
+    help_epilog += 'If *--qdx* is specified, and no audio devices are specified, *--search_alsa_in* is set to \'QDX\'.\n'
+    help_epilog += 'See fskmodem docs for more information on ALSA audio device settings:\n'
+    help_epilog += 'https://simplyequipped.github.io/fskmodem/fskmodem/modem.html#Modem\n'
+
+    usage = 'python -m fskmodem'
+
+    parser = argparse.ArgumentParser(prog=usage, description='CLI for fskmodem package', epilog = help_epilog)
+    parser.add_argument('--search-alsa-in', help='ALSA audio input device search text', metavar='TEXT')
+    parser.add_argument('--search-alsa-out', help='ALSA audio output device search text', metavar='TEXT')
+    parser.add_argument('--alsa-in', help='ALSA audio input device formated as \'card,device\'', metavar='DEVICE')
+    parser.add_argument('--alsa-out', help='ALSA audio output device formated as \'card,device\'', metavar='DEVICE')
     parser.add_argument('--baudmode', help='Baudmode of the modem', default='300')
-    parser.add_argument('--sync_byte', help='Suppress rx carrier detection until the specified byte is received (ex. \'0x23\')')
-    parser.add_argument('--confidence', help='Minimum confidence threshold based on SNR (i.e. squelch)', default=1.5, type=float)
-    parser.add_argument('--mark', help='Mark frequency in Hz', type=int)
-    parser.add_argument('--space', help='Space frequency in Hz', type=int)
-    parser.add_argument('--qdxcat', help='Utilize qdxcat for PTT control of QRPLabs QDX radio', action='store_true')
-    parser.add_argument('--qdxcat_freq', help='QDX radio frequency in Hz', type=int)
+    parser.add_argument('--sync-byte', help='Suppress rx carrier detection until the specified ordinal byte value is received (ex. \'0x23\')', metavar='BYTE')
+    parser.add_argument('--confidence', help='Minimum confidence threshold based on SNR (i.e. squelch)', default=1.5, type=float, metavar='CONF')
+    parser.add_argument('--mark', help='Mark frequency in Hz', type=int, metavar='FREQ')
+    parser.add_argument('--space', help='Space frequency in Hz', type=int, metavar='FREQ')
+    parser.add_argument('--eom', help='stdin end-of-message string, defaults to \'\\n\\n\' (not used with *--rns*)', default='\n\n')
+    parser.add_argument('--rns', help='Use RNS PipeInterface framing', action='store_true')
+    parser.add_argument('--quiet', help='Do not print messages on start', action='store_true')
+    parser.add_argument('--qdx', help='Utilize qdxcat for PTT control of QRPLabs QDX radio', action='store_true')
+    parser.add_argument('--qdx-freq', help='QDX radio frequency in Hz', type=int, metavar='FREQ')
     args = parser.parse_args()
 
-    search_alsa_dev_in = args.search_alsa_dev_in
+    search_alsa_in = args.search_alsa_in
+    EOM = args.eom
 
-    if args.qdxcat:
+    if args.qdx:
         # init qdx cat control
         import qdxcat
         qdx = qdxcat.QDX()
 
-        if args.qdxcat_freq:
+        if args.qdx_freq:
             # set qdx vfo frequency
-            qdx.set(qdx.VFO_A, args.qdxcat_freq)
+            qdx.set(qdx.VFO_A, args.qdx_freq)
 
-        if (args.qdxcat and
-            search_alsa_dev_in is None and
-            args.search_alsa_dev_out is None and
-            args.alsa_dev_in is None and
-            args.alsa_dev_out is None
+        if (args.qdx and
+            search_alsa_in is None and
+            args.search_alsa_out is None and
+            args.alsa_in is None and
+            args.alsa_out is None
         ):
-            # use QDX audio device if no other audio devices specified and qdxcat is set
-            search_alsa_dev_in = 'QDX'
+            # use QDX audio device if no other audio devices specified and qdx is specified
+            search_alsa_in = 'QDX'
     
     modem = fskmodem.Modem(
-        search_alsa_dev_in,
-        args.search_alsa_dev_out,
-        args.alsa_dev_in,
-        args.alsa_dev_out,
+        search_alsa_in,
+        args.search_alsa_out,
+        args.alsa_in,
+        args.alsa_out,
         args.baudmode,
         args.sync_byte,
         args.confidence,
@@ -139,17 +177,24 @@ if __name__ == '__main__':
         args.space
     )
 
-    if args.qdxcat:
+    if args.qdx:
         # set qdx ptt toggle callback
         modem.set_ptt_callback(qdx.toggle_ptt)
 
-    # on modem rx, write to stdout pipe
-    modem.set_rx_callback(_write_stdout)
+    if args.rns:
+        modem.set_rx_callback_bytes(_rns_write_stdout)
+        thread = threading.Thread(target=_rns_read_stdin)
+    else:
+        modem.set_rx_callback(_write_stdout)
+        thread = threading.Thread(target=_read_stdin)
 
-    # read from stdin, send via modem tx
-    thread = threading.Thread(target=_read_stdin)
     thread.daemon = True
     thread.start()
 
+    if not args.quiet and not args.rns:
+        print('Press Ctrl+C to exit...')
+
+    # modem is stopped when EOF reached on stdin pipe
     while modem.online:
         time.sleep(0.25)
+
