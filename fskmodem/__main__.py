@@ -118,16 +118,17 @@ def _rns_read_stdin():
                         byte = HDLC.ESC
                     escape = False
                 data_buffer += bytes([byte])
-                
+
+
 if __name__ == '__main__':
     help_epilog = 'The qdxcat package is required to use *--qdx* options.\n'
     help_epilog += 'If *--qdx* is specified, and no audio devices are specified, *--search_alsa_in* is set to \'QDX\'.\n'
     help_epilog += 'See fskmodem docs for more information on ALSA audio device settings:\n'
     help_epilog += 'https://simplyequipped.github.io/fskmodem/fskmodem/modem.html#Modem\n'
 
-    usage = 'python -m fskmodem'
+    program = 'python -m fskmodem'
 
-    parser = argparse.ArgumentParser(prog=usage, description='CLI for fskmodem package', epilog = help_epilog)
+    parser = argparse.ArgumentParser(prog=program, description='CLI for fskmodem package', epilog = help_epilog)
     parser.add_argument('--search-alsa-in', help='ALSA audio input device search text', metavar='TEXT')
     parser.add_argument('--search-alsa-out', help='ALSA audio output device search text', metavar='TEXT')
     parser.add_argument('--alsa-in', help='ALSA audio input device formated as \'card,device\'', metavar='DEVICE')
@@ -140,8 +141,7 @@ if __name__ == '__main__':
     parser.add_argument('--eom', help='stdin end-of-message string, defaults to \'\\n\\n\' (not used with *--rns*)', default='\n\n')
     parser.add_argument('--rns', help='Use RNS PipeInterface framing', action='store_true')
     parser.add_argument('--quiet', help='Do not print messages on start', action='store_true')
-    parser.add_argument('--qdx', help='Utilize qdxcat for PTT control of QRPLabs QDX radio', action='store_true')
-    parser.add_argument('--qdx-freq', help='QDX radio frequency in Hz', type=int, metavar='FREQ')
+    parser.add_argument('--qdx', help='Utilize qdxcat for PTT control of QRPLabs QDX radio, optionally followed by QDX frequency in Hz', nargs='?', default=False, const=True, metavar='[FREQ]')
     args = parser.parse_args()
 
     search_alsa_in = args.search_alsa_in
@@ -152,9 +152,10 @@ if __name__ == '__main__':
         import qdxcat
         qdx = qdxcat.QDX()
 
-        if args.qdx_freq:
+        if isinstance(args.qdx, str):
             # set qdx vfo frequency
-            qdx.set(qdx.VFO_A, args.qdx_freq)
+            freq = int(args.qdx)
+            qdx.set(qdx.VFO_A, freq)
 
         if (args.qdx and
             search_alsa_in is None and
@@ -182,9 +183,11 @@ if __name__ == '__main__':
         modem.set_ptt_callback(qdx.toggle_ptt)
 
     if args.rns:
+        # use RNS packet framing and bytes data
         modem.set_rx_callback_bytes(_rns_write_stdout)
         thread = threading.Thread(target=_rns_read_stdin)
     else:
+        # use EOM and string data
         modem.set_rx_callback(_write_stdout)
         thread = threading.Thread(target=_read_stdin)
 
