@@ -199,5 +199,9 @@ if __name__ == '__main__':
 
     # modem is stopped when EOF reached on stdin pipe
     while modem.online:
-        time.sleep(0.25)
+        try:
+            time.sleep(0.25)
+        except KeyboardInterrupt:
+            print()
+            break
 
