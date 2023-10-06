@@ -53,7 +53,7 @@ class HDLC:
         return data
 
 
-def _write_stdout(data):
+def _write_stdout(data, confidence):
     sys.stdout.write(data)
     sys.stdout.flush()
 
@@ -78,7 +78,7 @@ def _read_stdin():
             modem.send(data_buffer[:-2])
             data_buffer = ''
 
-def _rns_write_stdout(data):
+def _rns_write_stdout(data, confidence):
     data = bytes([HDLC.FLAG]) + HDLC.escape(data) + bytes([HDLC.FLAG])
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
