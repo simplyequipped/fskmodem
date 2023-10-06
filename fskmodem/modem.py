@@ -55,7 +55,7 @@ import atexit
 import shutil
 import threading
 import subprocess
-from subprocess import PIPE, CalledProcessError
+from subprocess import PIPE, CalledProcessError, SubprocessError
 
 
 class HDLC:
@@ -158,6 +158,14 @@ class FSKBase:
             
         # create subprocess with pipes for interaction with child process
         self._process = subprocess.Popen(self._shell_cmd, shell=True, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+
+        time.sleep(0.1)
+        
+        # check if process failed with exit code (returns None if running)
+        exit_code = self._process.poll()
+        if exit_code != None:
+            raise SubprocessError('{} subprocess failed with exit code {}, check minimodem settings (ex. ALSA device)'.format(self.mode.title(), exit_code))
+
         self.online = True
 
     def stop(self):
