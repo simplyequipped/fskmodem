@@ -41,10 +41,10 @@ import fskmodem
 
 
 class HDLC:
-    # RNS Pipe Interface packetizes data using simplified HDLC framing, similar to PPP
-    FLAG              = 0x7E
-    ESC               = 0x7D
-    ESC_MASK          = 0x20
+    # RNS PipeInterface packetizes data using simplified HDLC framing, similar to PPP
+    FLAG = 0x7E
+    ESC = 0x7D
+    ESC_MASK = 0x20
 
     @staticmethod
     def escape(data):
